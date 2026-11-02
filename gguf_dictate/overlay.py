@@ -16,6 +16,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
+from . import ipc  # noqa: E402
+
 W, H = 150, 40          # window size (pill is drawn centred inside)
 BARS = 16
 REC_W, BUSY_W, PILL_H = 124, 44, 28
@@ -59,7 +61,7 @@ class Overlay:
         sock = self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         sock.setblocking(False)
         try:
-            sock.bind(b"\0dictate-overlay")
+            sock.bind(ipc.OVERLAY)
         except OSError:
             pass  # another tray already owns it
         GLib.io_add_watch(sock.fileno(), GLib.IO_IN, self.on_data)

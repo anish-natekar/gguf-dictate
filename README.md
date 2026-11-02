@@ -1,7 +1,7 @@
 # gguf-dictate
 
 Hold a hotkey, talk, release — the transcription is typed into whatever window is focused.
-A tiny (~130 lines), single-file, fully local push-to-talk dictation tool for Linux/X11 that runs
+A small, fully local push-to-talk dictation tool for Linux/X11 that runs
 **any speech-to-text GGUF model** (Parakeet, Whisper, ...) through [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp).
 
 > **Status: early / experimental.** Model loading, transcription and mic capture are tested.
@@ -13,9 +13,9 @@ A tiny (~130 lines), single-file, fully local push-to-talk dictation tool for Li
 - **Bring your own model**: point `--model` at any `.gguf` file. The path is remembered.
 - **Fast**: the model stays loaded on the GPU (Vulkan, CPU fallback); a short phrase transcribes in tens of milliseconds once warm.
 - **Private**: everything runs on your machine; no network access after install.
-- **Minimal**: one Python file, three pip dependencies.
+- **Minimal**: three pip dependencies, no network, no daemon beyond the tray.
 
-It does **not** (yet) do Wayland, streaming/partial results, text post-processing, or a GUI.
+It does **not** (yet) do Wayland, Windows/macOS, streaming/partial results, or text post-processing.
 
 ## Install
 
@@ -25,13 +25,12 @@ System packages (Debian/Ubuntu):
 sudo apt install xdotool alsa-utils
 ```
 
-Python (3.9+):
+Python 3.9+. From source (see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup):
 
 ```bash
-git clone https://github.com/anish-natekar/gguf-dictate.git
-cd gguf-dictate
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+git clone https://github.com/anish-natekar/gguf-dictate.git && cd gguf-dictate
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -e .
 ```
 
 ### Install with pipx (recommended)
@@ -57,7 +56,7 @@ Models are not included in this repo.
 ## Run
 
 ```bash
-.venv/bin/python dictate.py --model /path/to/model.gguf
+dictate --model /path/to/model.gguf     # from source: .venv/bin/dictate ...
 ```
 
 Wait for `model ready`, click into any text box, then **hold `f9`**, talk, and release.
@@ -73,17 +72,17 @@ On later runs you can omit `--model` (the path is saved in `~/.config/dictate/co
 ## Top-bar icon (GNOME)
 
 ```bash
-/usr/bin/python3 tray.py
+dictate-tray               # from source: .venv/bin/python -m gguf_dictate.tray
 ```
 
 Adds a microphone icon to the top bar (uses the system Python's GTK + AppIndicator, stock on Ubuntu; the
 AppIndicator shell extension must be enabled). The menu has Start/Stop, **Model** (choose a `.gguf`, or pick a recent one),
 **Settings** (model path, hotkey, mic and spacing options), **How to use / shortcuts**, and **About**.
-It starts and restarts `dictate.py` for you.
+It starts and restarts the dictation process for you.
 
 The tray also shows a click-through, transparent **waveform pill** at the bottom of the screen: bars move with your
 voice while the key is held, then a spinner loops while the model transcribes. It needs
-`sudo apt install python3-gi-cairo`. Without the tray, `dictate.py` still works (no overlay).
+`sudo apt install python3-gi-cairo`. Without the tray, `dictate` still works (no overlay or snip tool).
 
 ## Snip + annotate + voice notes (for bug reports to chatbots)
 

@@ -1,3 +1,0 @@
-numpy
-pynput
-transcribe-cpp

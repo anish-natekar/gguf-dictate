@@ -4,10 +4,7 @@ Flow: snip hotkey -> frozen screen, drag a region (or Enter/F for full screen) -
 colours (keys 1-5), hold the dictate key to add a voice note under the selected colour's heading ->
 Enter queues it. The paste hotkey then pastes every queued image + its notes, in order.
 """
-import json
 import subprocess
-import time
-from pathlib import Path
 
 import cairo
 import gi
@@ -17,53 +14,18 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
-QUEUE_DIR = Path.home() / ".local" / "share" / "dictate" / "queue"
-FLAG = Path("/tmp/dictate-editor")      # exists while the editor is open: dictate.py then sends notes here
-DEFAULT_COLORS = [["Red", "#ff3b30"], ["Blue", "#0a84ff"], ["Green", "#30d158"], ["Yellow", "#ffd60a"], ["Purple", "#bf5af2"]]
+from .config import DEFAULT_COLORS, MAX_COLORS, editor_flag  # noqa: E402
+from .notes import Queue, format_notes  # noqa: E402
+
+FLAG = editor_flag()
 KEYS = "0 box   1-5 colour   F full screen   Ctrl+Z undo   hold dictate key or Speak = voice note   Ctrl+Enter save   Esc cancel"
+IMG_MS, TXT_MS = 900, 250     # wait after pasting an image / text before the next step
 
 
 def rgb(hexv):
     c = Gdk.RGBA()
     c.parse(hexv)
     return c.red, c.green, c.blue
-
-
-def format_notes(n, notes):
-    """'Screenshot 2' + one '## Colour' heading per colour that has notes."""
-    out, seen = [], []
-    for note in notes:
-        if note["color"] not in seen:
-            seen.append(note["color"])
-    for color in seen:
-        out.append(f"## {color}\n" + "\n".join(f"- {x['text']}" for x in notes if x["color"] == color))
-    return f"\nScreenshot {n}\n\n" + "\n\n".join(out) if out else ""
-
-
-IMG_MS, TXT_MS = 900, 250     # wait after pasting an image / text before the next step
-
-
-class Queue:
-    def __init__(self):
-        QUEUE_DIR.mkdir(parents=True, exist_ok=True)
-
-    def items(self):
-        out = []
-        for png in sorted(QUEUE_DIR.glob("*.png")):
-            try:
-                out.append((png, json.loads(png.with_suffix(".json").read_text())))
-            except (OSError, ValueError):
-                out.append((png, []))
-        return out
-
-    def add(self, surface, notes):
-        base = QUEUE_DIR / str(time.time_ns())
-        surface.write_to_png(str(base.with_suffix(".png")))
-        base.with_suffix(".json").write_text(json.dumps(notes))
-
-    def clear(self):
-        for f in QUEUE_DIR.glob("*"):
-            f.unlink()
 
 
 class Editor:
@@ -115,7 +77,8 @@ class Editor:
         def sep():
             bar.pack_start(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL, margin=4), False, False, 0)
 
-        self.btns = [button("edit-select-all-symbolic", "Box tool (0): drag to choose the capture area", lambda: self.pick(None), "snipicon snipbox", kind="tool")]
+        self.btns = [button("edit-select-all-symbolic", "Box tool (0): drag to choose the capture area", lambda: self.pick(None),
+                            "snipicon snipbox", kind="tool")]
         sep()
         for i, (name, _) in enumerate(colors):
             self.btns.append(button("", f"{name} pen ({i + 1})", lambda i=i: self.pick(i), f"snipsw snipc{i}", label=" ", kind="tool"))
@@ -197,8 +160,10 @@ class Editor:
                ".snipspeak.rec { background: #d32f2f; }\n"
                ".snipicon.kb, .snipok.kb { background: rgba(255,255,255,.22); box-shadow: 0 0 0 2px white; }\n"
                ".snipsw.kb { box-shadow: 0 0 0 2px rgba(255,255,255,.6); }\n"
-               ".snipok { background-image: none; background: #30d158; color: #111; font-weight: bold; border-radius: 16px; padding: 4px 14px; border: none; }\n"
-               ".snipsw { background-image: none; min-width: 22px; min-height: 22px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); }\n"
+               ".snipok { background-image: none; background: #30d158; color: #111; font-weight: bold; border-radius: 16px;"
+               " padding: 4px 14px; border: none; }\n"
+               ".snipsw { background-image: none; min-width: 22px; min-height: 22px; padding: 0; border-radius: 50%;"
+               " border: 2px solid rgba(255,255,255,.3); }\n"
                ".snipsw.sel { border: 3px solid white; }\n")
         for i, (_, hexv) in enumerate(self.colors):
             css += f".snipc{i} {{ background: {hexv}; }}\n"
@@ -432,7 +397,7 @@ class Editor:
 class Snip:
     def __init__(self, on_change, speak):
         self.queue, self.on_change, self.speak, self.editor, self.pasting = Queue(), on_change, speak, None, False
-        self.latest_text, self.latest_img, self.own_clip = None, None, False   # latest snip: Ctrl+V pastes it
+        self.latest_text, self.latest_img, self.own_clip, self.last_text = None, None, False, None   # latest snip: Ctrl+V pastes it
         self.cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         self.cb.connect("owner-change", self.clip_changed)
         FLAG.unlink(missing_ok=True)
@@ -452,7 +417,7 @@ class Snip:
         g = mon.get_geometry()
         root = Gdk.get_default_root_window()
         pix = Gdk.pixbuf_get_from_window(root, g.x, g.y, g.width, g.height)
-        cols = [c for c in (colors or DEFAULT_COLORS) if len(c) == 2][:9] or DEFAULT_COLORS
+        cols = [c for c in (colors or DEFAULT_COLORS) if len(c) == 2][:MAX_COLORS] or DEFAULT_COLORS
         self.editor = Editor(pix, cols, self.finished, self.speak)
         self.editor.queued = self.count()
         self.editor.win.connect("destroy", lambda *_: setattr(self, "editor", None))
@@ -462,7 +427,7 @@ class Snip:
         self.on_change()
         n = self.count()
         self.latest_img = GdkPixbuf.Pixbuf.new_from_file(str(self.queue.items()[-1][0]))
-        self.latest_text = format_notes(1, notes) if notes else None
+        self.latest_text = self.last_text = format_notes(1, notes) if notes else None
         self.set_clip(lambda: self.cb.set_image(self.latest_img))
         subprocess.Popen(["notify-send", "-i", "camera-photo", "-t", "3500", "Snip saved",
                           f"{n} in queue. Ctrl+V pastes this one" + (" + its notes" if notes else "")
@@ -472,6 +437,14 @@ class Snip:
         self.own_clip = True
         fn()
         GLib.timeout_add(300, lambda: setattr(self, "own_clip", False) or False)
+
+    def restore_latest(self):
+        """After paste-all the clipboard holds the last note text: put the latest snip back so Ctrl+V pastes it."""
+        if self.latest_img:
+            self.set_clip(lambda: self.cb.set_image(self.latest_img))
+            self.latest_text = self.last_text
+        self.pasting = False
+        return False
 
     def ctrl_v(self):
         """Ctrl+V was pressed: the app pastes the image natively, then we follow with the snip's notes."""
@@ -511,15 +484,15 @@ class Snip:
     def run(self, steps):
         if not steps:
             self.queue.clear()
-            self.pasting = False
             self.on_change()
+            GLib.timeout_add(300, self.restore_latest)   # let the last paste read the clipboard first
             return False
         kind, val = steps[0]
         cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         if kind == "img":
-            cb.set_image(GdkPixbuf.Pixbuf.new_from_file(str(val)))
+            self.set_clip(lambda: cb.set_image(GdkPixbuf.Pixbuf.new_from_file(str(val))))
         else:
-            cb.set_text(val, -1)
+            self.set_clip(lambda: cb.set_text(val, -1))
         GLib.timeout_add(150, self.press, steps)
         return False
 

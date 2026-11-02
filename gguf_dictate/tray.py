@@ -1,16 +1,11 @@
-#!/usr/bin/python3
 """Top-bar icon for dictate: start/stop, change model, settings, help, about.
 
-Runs on the system Python (needs python3-gi + AyatanaAppIndicator3, both stock
-on Ubuntu GNOME) and manages dictate.py as a child process in the venv.
+Needs python3-gi + AyatanaAppIndicator3 (stock on Ubuntu GNOME) and manages the dictation
+process (`python -m gguf_dictate.dictate`) as a child.
 """
 import fcntl
-import json
-import os
-import re
-import signal
-import socket
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -22,17 +17,13 @@ gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-_VENV = HERE / ".venv" / "bin" / "python"
-PY = _VENV if _VENV.exists() else Path(sys.executable)   # source checkout uses its .venv; pip/pipx installs use their own interpreter
-CONFIG = Path.home() / ".config" / "dictate" / "config.json"
-LOG = Path("/tmp/dictate.log")
-from overlay import Overlay  # noqa: E402
-from snip import DEFAULT_COLORS, Snip  # noqa: E402
+from . import __version__, hotkeys, ipc  # noqa: E402
+from .config import DEFAULT_COLORS, MAX_COLORS, load_config, lock_path, log_path, save_config  # noqa: E402
+from .overlay import Overlay  # noqa: E402
+from .snip import Snip  # noqa: E402
 
+LOG = log_path()
 REPO = "https://github.com/anish-natekar/gguf-dictate"
-HOTKEY_RE = re.compile(r"^[a-z0-9_]+(\+[a-z0-9_]+)*$")
 
 ICONS = {"stopped": "microphone-disabled-symbolic", "loading": "microphone-sensitivity-low-symbolic",
          "running": "microphone-sensitivity-high-symbolic"}
@@ -51,20 +42,8 @@ Tips
   - Wait for "Ready" in this menu before talking.
   - The first words are kept even if you start talking a bit early.
   - Quiet mic? Raise input volume in system Sound settings.
-  - Log: /tmp/dictate.log
+  - Log: {log}
 """
-
-
-def load_config():
-    try:
-        return json.loads(CONFIG.read_text())
-    except (OSError, ValueError):
-        return {}
-
-
-def save_config(cfg):
-    CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, indent=2))
 
 
 def info(parent, title, text):
@@ -154,13 +133,8 @@ class Tray:
 
     @staticmethod
     def speak(cmd):
-        """Speak button in the snip editor: tell dictate.py to start/stop recording."""
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        try:
-            s.sendto(cmd.encode(), b"\0dictate-control")
-        except OSError:
-            pass
-        s.close()
+        """Speak button in the snip editor: tell the dictation process to start/stop recording."""
+        ipc.send(cmd, ipc.CONTROL)
 
     def on_command(self, msg):
         if msg == "snip":
@@ -179,9 +153,9 @@ class Tray:
     def start(self):
         if self.proc:
             return
-        subprocess.run(["pkill", "-f", r"python[0-9.]* (-u )?(.*dictate\.py|-m dictate)"], check=False)  # stray copies would type everything twice
+        subprocess.run(["pkill", "-f", r"python[0-9.]* (-u )?-m gguf_dictate\.dictate"], check=False)  # stray copies would type everything twice
         self.log_fh = open(LOG, "w")
-        self.proc = subprocess.Popen([str(PY), "-u", "-m", "dictate"], stdout=self.log_fh, stderr=subprocess.STDOUT)
+        self.proc = subprocess.Popen([sys.executable, "-u", "-m", "gguf_dictate.dictate"], stdout=self.log_fh, stderr=subprocess.STDOUT)
         self.state = "loading"
         self.refresh()
 
@@ -210,7 +184,7 @@ class Tray:
             self.refresh()
             tail = LOG.read_text(errors="replace").strip().splitlines()[-1:] or [""]
             info(None, "Dictate stopped unexpectedly", f"{tail[0][:200]}\n\nSee {LOG} for details.")
-        elif self.state == "loading" and " ready in " in LOG.read_text(errors="replace"):
+        elif self.state == "loading" and " ready in " in LOG.read_text(errors="replace")[:200_000]:
             self.state = "running"
             self.refresh()
         return True
@@ -285,13 +259,13 @@ class Tray:
             path, hk = model.get_text().strip(), hotkey.get_text().strip().lower().replace(" ", "")
             sk, pk = (e.get_text().strip().lower().replace(" ", "") for e in (snip_hk, paste_hk))
             try:
-                cols = [[n.strip(), h.strip()] for n, h in (c.split("=") for c in colors.get_text().split(",") if c.strip())][:9]
+                cols = [[n.strip(), h.strip()] for n, h in (c.split("=") for c in colors.get_text().split(",") if c.strip())][:MAX_COLORS]
                 assert cols and all(Gdk.RGBA().parse(h) for _, h in cols)
             except (ValueError, AssertionError):
                 cols = None
             if not Path(path).expanduser().is_file():
                 info(d, "Model file not found", f"{path or '(empty)'} is not a file.")
-            elif not all(HOTKEY_RE.match(k) for k in (hk, sk, pk)):
+            elif not all(hotkeys.valid(k) for k in (hk, sk, pk)):
                 info(d, "Invalid hotkey", "Use key names joined with +, e.g. f9 or ctrl+shift+space.")
             elif cols is None:
                 info(d, "Invalid colours", "Use Name=#rrggbb pairs, e.g. Red=#ff3b30, Blue=#0a84ff")
@@ -306,10 +280,10 @@ class Tray:
         d.destroy()
 
     def show_help(self):
-        info(None, "How to use Dictate", HELP.format(hotkey=load_config().get("hotkey", "f9")))
+        info(None, "How to use Dictate", HELP.format(hotkey=load_config().get("hotkey", "f9"), log=LOG))
 
     def about(self):
-        d = Gtk.AboutDialog(program_name="Dictate", version="0.1", website=REPO, website_label="GitHub",
+        d = Gtk.AboutDialog(program_name="Dictate", version=__version__, website=REPO, website_label="GitHub",
                             comments="Local push-to-talk dictation using any speech-to-text GGUF model.\n"
                                      f"Model: {Path(load_config().get('model', 'none')).name}\nPowered by transcribe.cpp.",
                             license_type=Gtk.License.MIT_X11, icon_name="audio-input-microphone")
@@ -334,7 +308,7 @@ Categories=Utility;AudioVideo;
 
 def install_desktop():
     """Write an app-menu launcher (and autostart entry with --autostart) pointing at this install."""
-    exe = shutil.which("dictate-tray") or f"{sys.executable} {Path(__file__).resolve()}"
+    exe = shutil.which("dictate-tray") or f"{sys.executable} -m gguf_dictate.tray"
     targets = [Path.home() / ".local/share/applications/dictate.desktop"]
     if "--autostart" in sys.argv:
         targets.append(Path.home() / ".config/autostart/dictate.desktop")
@@ -347,11 +321,11 @@ def install_desktop():
 def main():
     if "--install-desktop" in sys.argv:
         return install_desktop()
-    lock = open("/tmp/dictate-tray.lock", "w")
+    lock = open(lock_path(), "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        raise SystemExit("dictate tray is already running")
+        raise SystemExit("dictate tray is already running") from None
     app = Tray()
     for sig in (signal.SIGINT, signal.SIGTERM):
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (app.quit(), False)[1])
