@@ -9,6 +9,7 @@ import json
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -18,7 +19,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import AyatanaAppIndicator3 as AppIndicator  # noqa: E402
-from gi.repository import GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -26,6 +27,7 @@ PY, SCRIPT = HERE / ".venv" / "bin" / "python", HERE / "dictate.py"
 CONFIG = Path.home() / ".config" / "dictate" / "config.json"
 LOG = Path("/tmp/dictate.log")
 from overlay import Overlay  # noqa: E402
+from snip import DEFAULT_COLORS, Snip  # noqa: E402
 
 REPO = "https://github.com/anish-natekar/gguf-dictate"
 HOTKEY_RE = re.compile(r"^[a-z0-9_]+(\+[a-z0-9_]+)*$")
@@ -76,8 +78,10 @@ class Tray:
         self.ind = AppIndicator.Indicator.new("dictate", ICONS["stopped"], AppIndicator.IndicatorCategory.APPLICATION_STATUS)
         self.ind.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         self.ind.set_title("Dictate")
+        self.snip = Snip(lambda: self.refresh(), self.speak)
         self.build_menu()
         self.overlay = Overlay()
+        self.overlay.extra = self.on_command
         GLib.timeout_add(500, self.poll)
         if load_config().get("model"):
             self.start()
@@ -116,6 +120,10 @@ class Tray:
         model_item.set_submenu(sub)
         m.append(model_item)
 
+        self.snip_item = add("", self.take_snip)
+        self.paste_item = add("", self.snip.paste_all)
+        self.clear_item = add("Clear snip queue", self.snip.clear)
+        m.append(Gtk.SeparatorMenuItem())
         add("Settings...", self.settings)
         m.append(Gtk.SeparatorMenuItem())
         add("How to use / shortcuts", self.show_help)
@@ -132,6 +140,33 @@ class Tray:
         self.status_item.set_label(f"{LABELS[self.state]}  -  hold [{hotkey}] to talk")
         self.toggle_item.set_label("Start" if self.state == "stopped" else "Stop")
         self.ind.set_icon_full(ICONS[self.state], LABELS[self.state])
+        cfg, n = load_config(), self.snip.count()
+        self.snip_item.set_label(f"Take snip  [{cfg.get('snip_hotkey', 'ctrl+alt+s')}]")
+        self.paste_item.set_label(f"Paste {n} queued snip(s)  [{cfg.get('paste_hotkey', 'ctrl+alt+v')}]")
+        self.paste_item.set_sensitive(n > 0)
+        self.clear_item.set_sensitive(n > 0)
+
+    # ---- snip -------------------------------------------------------------
+    def take_snip(self):
+        GLib.timeout_add(250, lambda: self.snip.start(load_config().get("colors", DEFAULT_COLORS)) or False)   # let the menu close first
+
+    @staticmethod
+    def speak(cmd):
+        """Speak button in the snip editor: tell dictate.py to start/stop recording."""
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        try:
+            s.sendto(cmd.encode(), b"\0dictate-control")
+        except OSError:
+            pass
+        s.close()
+
+    def on_command(self, msg):
+        if msg == "snip":
+            self.snip.start(load_config().get("colors", DEFAULT_COLORS))
+        elif msg == "paste":
+            self.snip.paste_all()
+        elif msg.startswith("note "):
+            self.snip.note(msg[5:])
 
     # ---- process ----------------------------------------------------------
     def start(self):
@@ -214,6 +249,9 @@ class Tray:
         browse.connect("clicked", lambda *_: model.set_text(self.pick_file(d) or model.get_text()))
         hotkey = Gtk.Entry(text=cfg.get("hotkey", "f9"))
         hint = Gtk.Label(label="Hold to talk. e.g. f9, ctrl+shift+space, ctrl_r", xalign=0)
+        snip_hk = Gtk.Entry(text=cfg.get("snip_hotkey", "ctrl+alt+s"))
+        paste_hk = Gtk.Entry(text=cfg.get("paste_hotkey", "ctrl+alt+v"))
+        colors = Gtk.Entry(text=", ".join(f"{n}={h}" for n, h in cfg.get("colors", DEFAULT_COLORS)), width_chars=48)
         lazy = Gtk.CheckButton(label="Open the mic only while the key is held (slower start, no always-on mic)")
         lazy.set_active(cfg.get("lazy_mic", False))
         nospace = Gtk.CheckButton(label="Don't add a space after each phrase")
@@ -225,18 +263,33 @@ class Tray:
         g.attach(Gtk.Label(label="Hotkey", xalign=0), 0, 1, 1, 1)
         g.attach(hotkey, 1, 1, 1, 1)
         g.attach(hint, 1, 2, 2, 1)
-        g.attach(lazy, 1, 3, 2, 1)
-        g.attach(nospace, 1, 4, 2, 1)
+        g.attach(Gtk.Label(label="Snip hotkey", xalign=0), 0, 3, 1, 1)
+        g.attach(snip_hk, 1, 3, 1, 1)
+        g.attach(Gtk.Label(label="Paste-all hotkey", xalign=0), 0, 4, 1, 1)
+        g.attach(paste_hk, 1, 4, 1, 1)
+        g.attach(Gtk.Label(label="Snip colours", xalign=0), 0, 5, 1, 1)
+        g.attach(colors, 1, 5, 2, 1)
+        g.attach(Gtk.Label(label="Name=#hex, comma separated (max 9). Keys 1-9 pick them in the editor.", xalign=0), 1, 6, 2, 1)
+        g.attach(lazy, 1, 7, 2, 1)
+        g.attach(nospace, 1, 8, 2, 1)
         d.show_all()
 
         while d.run() == Gtk.ResponseType.OK:
             path, hk = model.get_text().strip(), hotkey.get_text().strip().lower().replace(" ", "")
+            sk, pk = (e.get_text().strip().lower().replace(" ", "") for e in (snip_hk, paste_hk))
+            try:
+                cols = [[n.strip(), h.strip()] for n, h in (c.split("=") for c in colors.get_text().split(",") if c.strip())][:9]
+                assert cols and all(Gdk.RGBA().parse(h) for _, h in cols)
+            except (ValueError, AssertionError):
+                cols = None
             if not Path(path).expanduser().is_file():
                 info(d, "Model file not found", f"{path or '(empty)'} is not a file.")
-            elif not HOTKEY_RE.match(hk):
+            elif not all(HOTKEY_RE.match(k) for k in (hk, sk, pk)):
                 info(d, "Invalid hotkey", "Use key names joined with +, e.g. f9 or ctrl+shift+space.")
+            elif cols is None:
+                info(d, "Invalid colours", "Use Name=#rrggbb pairs, e.g. Red=#ff3b30, Blue=#0a84ff")
             else:
-                cfg.update(hotkey=hk, lazy_mic=lazy.get_active(), no_space=nospace.get_active())
+                cfg.update(hotkey=hk, snip_hotkey=sk, paste_hotkey=pk, colors=cols, lazy_mic=lazy.get_active(), no_space=nospace.get_active())
                 cfg["model"] = str(Path(path).expanduser())
                 cfg["recent"] = [cfg["model"]] + [p for p in cfg.get("recent", []) if p != cfg["model"]][:4]
                 save_config(cfg)

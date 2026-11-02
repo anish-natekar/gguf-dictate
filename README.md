@@ -74,6 +74,23 @@ The tray also shows a click-through, transparent **waveform pill** at the bottom
 voice while the key is held, then a spinner loops while the model transcribes. It needs
 `sudo apt install python3-gi-cairo`. Without the tray, `dictate.py` still works (no overlay).
 
+## Snip + annotate + voice notes (for bug reports to chatbots)
+
+Press **`ctrl+alt+s`** (or tray menu -> Take snip). The screen freezes and a toolbar appears:
+
+| Control | Action |
+| --- | --- |
+| **Box** (`0`, default) | No colour selected: drag to choose the capture area. Drag again to redo it. |
+| **Colours** (`1`-`5`) | Pen in that colour. Draw on the shot. Colours are editable in Settings. |
+| **Speak** / hold the dictate key | Voice note, saved under the selected colour's heading (**General** if none). |
+| **Full screen** (`F`) | Capture the whole screen. |
+| **Undo** (`Ctrl+Z`) | Undoes strokes and box changes, in order. |
+| **Clear pen**, **Save** (`Enter`), **Cancel** (`Esc`) | |
+
+Saved snips go into a queue (`~/.local/share/dictate/queue`). Click into a chatbot box and press **`ctrl+alt+v`**:
+every queued image is pasted in order, each followed by its notes (`## Red` / `- note`), then the queue is cleared.
+Hotkeys and colours are in Settings.
+
 ## How it works
 
 1. `arecord` streams 16 kHz mono audio; a rolling 0.25 s buffer keeps the first syllable from being clipped.

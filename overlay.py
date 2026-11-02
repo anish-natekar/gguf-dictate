@@ -4,6 +4,7 @@ A click-through, non-focusable, transparent window: bars follow your voice while
 is held, a spinner loops while the model transcribes, then it fades away.
 Messages (abstract unix socket "dictate-overlay"): rec | lvl <rms> | busy | idle
 """
+import colorsys
 import math
 import socket
 from collections import deque
@@ -15,10 +16,15 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-W, H = 240, 64          # window size (pill is drawn centred inside)
-BARS = 26
-REC_W, BUSY_W, PILL_H = 200, 64, 44
-BOTTOM_GAP = 28
+W, H = 150, 40          # window size (pill is drawn centred inside)
+BARS = 16
+REC_W, BUSY_W, PILL_H = 124, 44, 28
+BOTTOM_GAP = 8
+
+
+def aurora(t):
+    """Cyan -> violet -> pink gradient; t in [0, 1) wraps around smoothly."""
+    return colorsys.hsv_to_rgb(0.50 + 0.38 * (0.5 - 0.5 * math.cos(2 * math.pi * (t % 1.0))), 0.62, 1.0)
 
 
 class Overlay:
@@ -28,6 +34,7 @@ class Overlay:
         self.disp = [0.0] * BARS
         self.ref = 0.03            # adaptive loudness reference so quiet mics still move the bars
         self.timer = None
+        self.extra = None          # callback for non-animation messages (snip / paste / note ...)
 
         win = self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
         win.set_title("dictate-overlay")
@@ -40,6 +47,7 @@ class Overlay:
         win.set_keep_above(True)
         win.set_type_hint(Gdk.WindowTypeHint.NOTIFICATION)
         win.set_default_size(W, H)
+        win.set_size_request(W, H)
         win.set_resizable(False)
         visual = win.get_screen().get_rgba_visual()
         if visual:
@@ -67,21 +75,26 @@ class Overlay:
     def on_data(self, *_):
         while True:
             try:
-                msg = self.sock.recv(128).decode()
+                msg = self.sock.recv(65536).decode()
             except (BlockingIOError, OSError):
                 break
             self.handle(msg)
         return True
 
     def handle(self, msg):
+        if msg in ("snip", "paste") or msg.startswith("note "):
+            if self.extra:
+                self.extra(msg)
+            return
         if msg == "rec":
             self.state = "rec"
             self.hist.extend([0.0] * BARS)
             self.ref = 0.03
         elif msg.startswith("lvl "):
             rms = float(msg[4:])
-            self.ref = max(self.ref * 0.995, rms, 0.02)
-            self.hist.append(min(1.0, (rms / self.ref) ** 0.7))
+            self.ref = max(self.ref * 0.985, rms, 0.02)
+            floor = 0.004                                   # ignore room noise
+            self.hist.append(min(1.0, max(0.0, (rms - floor) / (self.ref - floor))))
         elif msg == "busy":
             self.state = "busy"
         elif msg == "idle":
@@ -97,7 +110,7 @@ class Overlay:
         self.pill_w += (target_w - self.pill_w) * 0.25
         self.phase += 0.033
         for i, v in enumerate(self.hist):
-            self.disp[i] += (v - self.disp[i]) * 0.45
+            self.disp[i] += (v - self.disp[i]) * (0.85 if v > self.disp[i] else 0.35)  # fast attack, slower release
         self.win.queue_draw()
         if self.state == "idle" and self.alpha < 0.01:
             self.alpha, self.timer = 0.0, None
@@ -112,7 +125,7 @@ class Overlay:
         cr.set_operator(cairo.OPERATOR_OVER)
         if self.alpha <= 0.01:
             return
-        a, cx, cy, pw = self.alpha, W / 2, H / 2, self.pill_w
+        a, cx, cy, pw = self.alpha, widget.get_allocated_width() / 2, widget.get_allocated_height() / 2, self.pill_w
         x0, y0, r = cx - pw / 2, cy - PILL_H / 2, PILL_H / 2
         cr.new_sub_path()
         cr.arc(x0 + pw - r, y0 + r, r, -math.pi / 2, math.pi / 2)
@@ -127,25 +140,27 @@ class Overlay:
             self.draw_bars(cr, cx, cy, a)
 
     def draw_bars(self, cr, cx, cy, a):
-        pitch, bw = (REC_W - 36) / BARS, 3.2
+        pitch, bw = (REC_W - 24) / BARS, 3.0
         left = cx - (BARS * pitch) / 2
         cr.set_line_cap(cairo.LINE_CAP_ROUND)
         cr.set_line_width(bw)
         for i, v in enumerate(self.disp):
-            h = 3 + v * (PILL_H - 14)
+            h = 3 + v * (PILL_H - 8)
             x = left + pitch * (i + 0.5)
             edge = min(i, BARS - 1 - i) / 4.0           # taper the ends
-            cr.set_source_rgba(1, 1, 1, a * (0.35 + 0.65 * min(1.0, edge)))
+            red, grn, blu = aurora(i / BARS * 0.8 + self.phase * 0.25)   # colours drift slowly
+            cr.set_source_rgba(red, grn, blu, a * (0.45 + 0.55 * min(1.0, edge)))
             cr.move_to(x, cy - h / 2)
             cr.line_to(x, cy + h / 2)
             cr.stroke()
 
     def draw_spinner(self, cr, cx, cy, a):
-        n, radius = 8, 11
+        n, radius = 8, 7
         head = (self.phase * 1.6) % 1.0 * n              # loops once every ~0.6s
         for i in range(n):
             ang = i / n * 2 * math.pi - math.pi / 2
             fade = ((head - i) % n) / n                    # 0 at the head, 1 at the tail
-            cr.set_source_rgba(1, 1, 1, a * (1.0 - 0.85 * fade))
-            cr.arc(cx + radius * math.cos(ang), cy + radius * math.sin(ang), 2.6 - 1.2 * fade, 0, 2 * math.pi)
+            red, grn, blu = aurora(i / n)
+            cr.set_source_rgba(red, grn, blu, a * (1.0 - 0.85 * fade))
+            cr.arc(cx + radius * math.cos(ang), cy + radius * math.sin(ang), 1.9 - 0.9 * fade, 0, 2 * math.pi)
             cr.fill()
