@@ -1,9 +1,9 @@
 """OS-specific adapters. `default_keys` / `default_notifier` pick the right ones for the running OS."""
 import sys
 
-from .linux import NotifySend, XdotoolKeys
+from .linux import NotifySend, PipeWireMonitorSource, XdotoolKeys
 
-__all__ = ["PynputKeys", "QtNotifier", "default_keys", "default_notifier"]
+__all__ = ["PynputKeys", "QtNotifier", "UnsupportedSystemAudio", "default_keys", "default_notifier", "default_system_source"]
 
 
 class PynputKeys:
@@ -33,6 +33,20 @@ class QtNotifier:
 
     def toast(self, title, body):
         self.icon.showMessage(title, body)
+
+
+class UnsupportedSystemAudio:
+    """Stands in where call/system audio cannot be captured yet: meetings then record the mic alone."""
+
+    def open(self, callback):
+        raise RuntimeError("system audio capture is not supported on this platform yet")
+
+    def close(self):
+        pass
+
+
+def default_system_source(platform=None):
+    return PipeWireMonitorSource() if (platform or sys.platform).startswith("linux") else UnsupportedSystemAudio()
 
 
 def default_keys(platform=None):

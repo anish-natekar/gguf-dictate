@@ -1,6 +1,7 @@
 """Help and About boxes."""
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
 from .. import __version__
@@ -15,6 +16,9 @@ Examples for the hotkey box:
   f9            ctrl+shift+space      ctrl_r (right Ctrl only)
 Use "ctrl" for either Ctrl key, "ctrl_r" / "ctrl_l" for one side.
 Avoid ctrl+alt+space: Claude desktop uses it.
+
+Meetings: the meeting hotkey (Settings, default F8) shows a small recorder; press its red button to record.
+Tray > Meetings... lists recordings and makes transcripts.
 
 Tips
   - Wait for "Ready" in this menu before talking.
@@ -35,3 +39,11 @@ def show_about(model):
 
 def show_error(title, text):
     QMessageBox.warning(None, title, text)
+
+
+def confirm_discard():
+    box = QMessageBox(QMessageBox.Question, "Discard recording", "Discard this meeting recording? The audio will be deleted.",
+                      QMessageBox.Yes | QMessageBox.No)
+    box.setDefaultButton(QMessageBox.No)
+    box.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+    return box.exec() == QMessageBox.Yes

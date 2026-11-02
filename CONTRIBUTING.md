@@ -30,6 +30,7 @@ Workflow for changes: write the failing test first, then the code. Keep GUI-free
 | `core/` | Pure logic: dictation state, recorder, paste-all, editor/overlay/settings models, lock | no |
 | `platform/` | OS-specific adapters: mic (sounddevice), xdotool, notify-send, Qt clipboard/clock, pynput hotkeys | partly |
 | `ui/` | Qt widgets: tray, settings, waveform overlay, snip editor, snip controller | yes (tests use `QT_QPA_PLATFORM=offscreen`) |
+| `core/meetings.py`, `meeting_*.py` | Meeting library (folders + SQLite search), recorder, transcription job, view text | no |
 | `app.py` | Wires everything into one process (`dictate-tray`) | yes |
 
 Put new logic in `core/` where you can, and add a test first. Qt code is tested headless with pytest-qt; hotkeys, the real mic

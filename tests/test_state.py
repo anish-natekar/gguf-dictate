@@ -230,3 +230,18 @@ def test_snip_hotkey_can_be_changed():
     assert r.sent == ["snip"]
     r.press("ctrl_r")
     assert r.state.active
+
+
+def test_meeting_hotkey_fires_once_while_held(r):
+    r.router = HotkeyRouter("f9", "ctrl+alt+s", "ctrl+alt+v", r.state, r.sent.append, editor_open=lambda: False,
+                            sleep=r.slept.append, meeting="f8")
+    r.press("f8")
+    assert r.sent == ["meeting"]
+    r.release("f8")
+    r.press("f8")
+    assert r.sent == ["meeting", "meeting"]
+
+
+def test_without_a_meeting_hotkey_nothing_fires(r):
+    r.press("f8")
+    assert r.sent == []

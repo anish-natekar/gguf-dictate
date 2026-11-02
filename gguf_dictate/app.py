@@ -14,7 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QFileDialog
 
-from .config import DEFAULT_COLORS, load_config, lock_path, log_path, save_config
+from .config import DEFAULT_COLORS, load_config, lock_path, log_path, meetings_dir, save_config
 from .core.dictation import Dictation
 from .core.lock import SingleInstance
 from .core.recorder import Recorder
@@ -30,11 +30,11 @@ class App(QObject):
     failed = Signal(int, str)
 
     def __init__(self, load_model, source, keys, snip, overlay, tray, start_listener, show_error, open_settings, quit_app, log=print,
-                 show_help=lambda hotkey: None, show_about=lambda model: None):
+                 show_help=lambda hotkey: None, show_about=lambda model: None, meetings=None):
         super().__init__()
         self.load_model, self.source, self.keys, self.snip, self.overlay, self.tray = load_model, source, keys, snip, overlay, tray
         self.start_listener, self.show_error, self.open_settings, self.quit_app, self.log = start_listener, show_error, open_settings, quit_app, log
-        self.help_cb, self.about_cb = show_help, show_about
+        self.help_cb, self.about_cb, self.meetings = show_help, show_about, meetings
         self.state, self.gen, self.dictation, self.mic, self.listener = "stopped", 0, None, None, None
         self.loaded.connect(self.on_loaded)
         self.failed.connect(self.on_failed)
@@ -71,8 +71,11 @@ class App(QObject):
             self.mic = Recorder(self.source(), on_level=lambda lvl: self.overlay.post(f"lvl {lvl:.5f}"), lazy=cfg.get("lazy_mic", False))
             self.dictation = Dictation(model, self.mic, self.keys, self.overlay.post, self.snip.editor_open, hotkey,
                                        cfg.get("snip_hotkey", "ctrl+alt+s"), cfg.get("paste_hotkey", "ctrl+alt+v"),
-                                       no_space=cfg.get("no_space", False), log=self.log)
+                                       no_space=cfg.get("no_space", False), meeting=cfg.get("meeting_hotkey", "f8") if self.meetings else None,
+                                       log=self.log)
             self.listener = self.start_listener(self.dictation.router)
+            if self.meetings:
+                self.meetings.set_model(model)
         except Exception as e:      # noqa: BLE001 - e.g. no microphone / missing libportaudio2
             self.stop()
             self.show_error("Dictate could not start", str(e))
@@ -93,6 +96,8 @@ class App(QObject):
         if self.mic:
             self.mic.close()
         self.listener = self.mic = self.dictation = None
+        if self.meetings:
+            self.meetings.set_model(None)
         self.set_state("stopped")
 
     def restart(self):
@@ -103,6 +108,8 @@ class App(QObject):
         self.stop() if self.state != "stopped" else self.start()
 
     def quit(self):
+        if self.meetings:
+            self.meetings.shutdown()
         self.stop()
         self.quit_app()
 
@@ -119,6 +126,8 @@ class App(QObject):
             self.snip.cancel()
         elif msg == "paste":
             self.snip.paste_all()
+        elif msg == "meeting":
+            self.toggle_meeting()
         elif msg == "ctrlv":
             self.snip.ctrl_v()
         elif msg.startswith("note "):
@@ -133,6 +142,14 @@ class App(QObject):
 
     def clear(self):
         self.snip.clear()
+
+    def toggle_meeting(self):
+        if self.meetings:
+            self.meetings.toggle()
+
+    def show_meetings(self):
+        if self.meetings:
+            self.meetings.show_window()
 
     def settings(self):
         self.open_settings()
@@ -195,20 +212,32 @@ def main():
 
     qapp = QApplication(sys.argv)
     qapp.setQuitOnLastWindowClosed(False)
+    from .core.meeting_recorder import MeetingRecorder
+    from .core.meetings import Library
     from .model import load_session
-    from .platform import default_keys, default_notifier
+    from .platform import default_keys, default_notifier, default_system_source
     from .platform.audio import SoundDeviceSource
     from .platform.keys import start_listener
     from .ui import dialogs
+    from .ui.meeting import MeetingController
+    from .ui.meeting_pill import MeetingPill
+    from .ui.meetings import MeetingsWindow
     from .ui.overlay import Overlay
     from .ui.settings import SettingsDialog
     from .ui.snip import SnipController
     from .ui.tray import Tray
 
-    tray = Tray(None, lambda: snip.count())
+    tray = Tray(None, lambda: snip.count(), lambda: meetings.recording)
     keys = default_keys()
     snip = SnipController(on_change=lambda: tray.refresh(), speak=lambda cmd: app.speak(cmd), keys=keys, notifier=default_notifier(icon=tray.icon))
     overlay = Overlay()
+    notifier = default_notifier(icon=tray.icon)
+    meetings = MeetingController(
+        Library(meetings_dir()),
+        make_recorder=lambda lib: MeetingRecorder(lib, SoundDeviceSource(), default_system_source()),
+        make_pill=lambda pos: MeetingPill(pos),
+        make_window=lambda lib, transcribe: MeetingsWindow(lib, transcribe),
+        toast=notifier.toast, show_error=dialogs.show_error, confirm_discard=dialogs.confirm_discard)
     dialog = {}
 
     def open_settings():
@@ -219,8 +248,10 @@ def main():
         d.activateWindow()
 
     app = App(load_session, SoundDeviceSource, keys, snip, overlay, tray, start_listener, dialogs.show_error, open_settings, qapp.quit,
-              log=lambda m: print(m, flush=True), show_help=lambda hk: dialogs.show_help(hk, log_path()), show_about=dialogs.show_about)
+              log=lambda m: print(m, flush=True), show_help=lambda hk: dialogs.show_help(hk, log_path()), show_about=dialogs.show_about,
+              meetings=meetings)
     tray.actions = app
+    meetings.changed.connect(tray.refresh)
     tray.refresh()
     overlay.extra = app.on_command
     overlay.show()
@@ -231,6 +262,7 @@ def main():
     ticker.start(500)
     ticker.timeout.connect(lambda: None)
     QTimer.singleShot(0, app.start)
+    QTimer.singleShot(0, meetings.recover)
     code = qapp.exec()
     lock.release()
     sys.exit(code)

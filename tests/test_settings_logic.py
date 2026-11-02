@@ -63,3 +63,20 @@ def test_remember_model_puts_it_first_dedups_and_caps_at_five():
     assert cfg["model"] == "c" and cfg["recent"] == ["c", "a", "b", "d", "e"]
     remember_model(cfg, "z")
     assert cfg["recent"] == ["z", "c", "a", "b", "d"]
+
+
+def test_meeting_hotkey_is_normalised_and_defaults(model):
+    assert validate(form(model, meeting_hotkey="F8"))["meeting_hotkey"] == "f8"
+    assert validate(form(model))["meeting_hotkey"] == "f8"
+
+
+def test_invalid_meeting_hotkey(model):
+    with pytest.raises(SettingsError, match="Invalid hotkey"):
+        validate(form(model, meeting_hotkey="ctrl+"))
+
+
+def test_the_same_hotkey_for_two_actions_is_rejected(model):
+    with pytest.raises(SettingsError, match="Duplicate hotkey"):
+        validate(form(model, meeting_hotkey="F9"))
+    with pytest.raises(SettingsError, match="Duplicate hotkey"):
+        validate(form(model, snip_hotkey="ctrl+alt+v"))

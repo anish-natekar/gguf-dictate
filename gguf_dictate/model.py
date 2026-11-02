@@ -1,5 +1,6 @@
 """Loads a speech-to-text GGUF through transcribe.cpp and warms it up (the first GPU run compiles shaders)."""
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -13,9 +14,11 @@ class Loaded:
 
     def __init__(self, model, session):
         self.model, self.session = model, session
+        self.lock = threading.Lock()      # dictation and meeting transcription share one session
 
     def run(self, audio):
-        return self.session.run(audio)
+        with self.lock:
+            return self.session.run(audio)
 
 
 def load_session(path):

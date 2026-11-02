@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- Meeting recorder: floating, draggable pill that appears ready (record button), then shows time, pause and save; mic and system audio saved as two tracks (system audio on Linux via PipeWire).
+- Meetings window from the tray: month calendar, day list, full-text search, notes, and an on-demand "Generate transcript" labelled Me / Them.
+- New `meeting_hotkey` setting (default `f8`); interrupted recordings are recovered on the next start.
+- Dictation and meeting transcription share one model session safely.
+
 ## 0.3.0
 - UI ported from GTK to Qt (PySide6); one process instead of tray + dictation subprocess. No system GTK packages needed.
 - Microphone via sounddevice (`libportaudio2`) instead of `arecord`.

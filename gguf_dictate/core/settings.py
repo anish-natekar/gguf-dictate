@@ -43,8 +43,11 @@ def validate(form):
     if not path or not Path(path).expanduser().is_file():
         raise SettingsError("Model file not found", f"{path or '(empty)'} is not a file.")
     keys = {k: hotkeys.normalize(form[k]) for k in ("hotkey", "snip_hotkey", "paste_hotkey")}
+    keys["meeting_hotkey"] = hotkeys.normalize(form.get("meeting_hotkey", "f8"))
     if not all(hotkeys.valid(k) for k in keys.values()):
         raise SettingsError("Invalid hotkey", "Use key names joined with +, e.g. f9 or ctrl+shift+space.")
+    if len(set(keys.values())) < len(keys):
+        raise SettingsError("Duplicate hotkey", "Each action needs its own hotkey.")
     return {"model": str(Path(path).expanduser()), **keys, "colors": parse_colors(form["colors"]),
             "lazy_mic": bool(form.get("lazy_mic")), "no_space": bool(form.get("no_space"))}
 

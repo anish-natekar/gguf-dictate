@@ -14,8 +14,8 @@ LABELS = {"stopped": "Stopped", "loading": "Loading model...", "running": "Ready
 
 
 class Tray:
-    def __init__(self, actions, count):
-        self.actions, self.count, self.state = actions, count, "stopped"
+    def __init__(self, actions, count, recording=lambda: False):
+        self.actions, self.count, self.recording, self.state = actions, count, recording, "stopped"
         self.icon = QSystemTrayIcon()
         self.icon.setToolTip("Dictate")
         self.menu = QMenu()
@@ -44,6 +44,13 @@ class Tray:
         self.add(f"Take snip  [{cfg.get('snip_hotkey', 'ctrl+alt+s')}]", a.take_snip)
         self.add(f"Paste {n} queued snip(s)  [{cfg.get('paste_hotkey', 'ctrl+alt+v')}]", a.paste_all, enabled=n > 0)
         self.add("Clear snip queue", a.clear, enabled=n > 0)
+        m.addSeparator()
+        hk = cfg.get("meeting_hotkey", "f8")
+        if self.recording():
+            self.add("Meeting recording in progress (save it from the pill)", enabled=False)
+        else:
+            self.add(f"Open meeting recorder  [{hk}]", a.toggle_meeting)
+        self.add("Meetings...", a.show_meetings)
         m.addSeparator()
         self.add("Settings...", a.settings)
         m.addSeparator()

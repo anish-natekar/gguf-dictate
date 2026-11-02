@@ -79,10 +79,15 @@ def route_text(text, editor_open, no_space):
 class HotkeyRouter:
     """Turns raw key names into actions. Feed it `press(name)` / `release(name)` from any key listener."""
 
-    def __init__(self, talk, snip, paste, state, notify, editor_open, sleep=time.sleep):
+    def __init__(self, talk, snip, paste, state, notify, editor_open, sleep=time.sleep, meeting=None):
         self.talk, self.snip, self.paste = (hotkeys.parse(h) for h in (talk, snip, paste))
+        self.meeting = hotkeys.parse(meeting) if meeting else None
         self.state, self.notify, self.editor_open, self.sleep = state, notify, editor_open, sleep
         self.down, self.fired = set(), set()
+
+    def combos(self):
+        pairs = [("snip", self.snip), ("paste", self.paste)]
+        return pairs + [("meeting", self.meeting)] if self.meeting else pairs
 
     def press(self, name):
         self.down.add(name)
@@ -92,15 +97,15 @@ class HotkeyRouter:
             self.notify("ctrlv")    # the tray follows a snip's image paste with its notes
         if hotkeys.held(self.talk, self.down):
             self.state.begin("key")
-        for action, combo in (("snip", self.snip), ("paste", self.paste)):
+        for action, combo in self.combos():
             if action not in self.fired and hotkeys.held(combo, self.down):
                 self.fired.add(action)
-                if action == "snip":
+                if action in ("snip", "meeting"):
                     self.notify(action)   # paste waits for key release: a synthetic Ctrl+V would clash with the held keys
 
     def release(self, name):
         self.down.discard(name)
-        for action, combo in (("snip", self.snip), ("paste", self.paste)):
+        for action, combo in self.combos():
             if action in self.fired and not hotkeys.held(combo, self.down):
                 self.fired.discard(action)
                 if action == "paste":

@@ -12,11 +12,12 @@ several colours, add a voice note per colour, queue several snips and paste them
 - **Push-to-talk dictation** into any text box: hold the hotkey, speak, release.
 - **Bring your own model**: pick any `.gguf` in Settings. The path is remembered.
 - **Fast**: the model stays loaded on the GPU (Vulkan, CPU fallback); a short phrase transcribes in tens of milliseconds once warm.
+- **Meeting recorder**: record a call (your mic and the system audio), keep it in a calendar library, and make a transcript when you want one.
 - **Snip + annotate + voice notes**: for showing a chatbot exactly what is wrong in a UI, image, video frame or 3D view.
 - **Private**: everything runs on your machine; no network access after install.
 - **Hackable**: pure Python (Qt UI), logic separated from the GUI and covered by tests.
 
-Not supported: Wayland, macOS, streaming/partial results, text post-processing.
+Not supported: Wayland, macOS, streaming/partial results, live meeting transcription, text post-processing.
 
 ## Support
 
@@ -106,7 +107,7 @@ snip colours, "open the mic only while the key is held" (adds ~100 ms, avoids th
 ## Tray icon
 
 Adds a microphone icon to the top bar / system tray. The menu has
-Start/Stop, **Model** (choose a `.gguf`, or pick a recent one), **Settings**, **How to use / shortcuts**, and **About**.
+Start/Stop, **Model** (choose a `.gguf`, or pick a recent one), snip actions, **Open meeting recorder**, **Meetings...**, **Settings**, **How to use / shortcuts**, and **About**.
 
 The app also shows a click-through, transparent **waveform pill** at the bottom of the screen: bars move with your
 voice while the key is held, then a spinner loops while the model transcribes.
@@ -135,6 +136,27 @@ Saved snips go into a queue (`~/.local/share/dictate/queue`). Click into a chatb
 every queued image is pasted in order, each followed by its notes (`## Red` / `- note`), then the queue is cleared.
 The paste fires when you release the keys, so hold-and-release the combo once.
 Hotkeys and colours are in Settings.
+
+## Meeting recorder
+
+Records a meeting to disk, then turns it into a transcript when you ask. Nothing is transcribed live.
+
+- Press the hotkey (default `F8`, changeable in Settings) or pick **Open meeting recorder** in the tray. A small **recorder pill**
+  appears on top of everything. Nothing is recorded yet: press its red **record** button to start. The hotkey works while the model is loaded; the tray always works.
+- While recording the pill shows a blinking dot, the elapsed time, **pause** and **save**. Drag it anywhere; it snaps to the corners
+  and remembers where you left it. The **X** closes the pill (while recording it asks, then discards the audio). Once recording, the hotkey does nothing, so the pill cannot disappear by accident: save from the pill. Before recording, the hotkey again dismisses the pill.
+- Two tracks are saved: your **microphone** ("Me") and the **system audio** ("Them": the other people on the call). Linux needs
+  PipeWire (`wpctl` and `pw-record`: `sudo apt install wireplumber pipewire-bin`). Where system audio cannot be captured, the meeting
+  records the mic alone and says so.
+- **Tray > Meetings...** opens a month calendar (days with meetings are marked), the day's list, full-text search across titles,
+  notes and transcripts, editable title and notes, and **Generate transcript**. Transcripts are labelled Me / Them with timestamps and can be copied as Markdown.
+- Each meeting is a folder, `YYYY-MM-DD_HHMM`, in your user data directory (`meetings/`): `mic.wav`, `system.wav`, `meeting.json`,
+  `transcript.json`, `notes.md`. The search index is rebuilt from the folders if it is lost. A crash or power cut leaves a playable
+  recording that is recovered on the next start.
+
+Tips and limits: use headphones, otherwise your mic also picks up the other side from your speakers and they appear twice.
+Speakers inside the system track are not told apart ("Them" is everyone else). The system audio source is the default output when the
+meeting starts; switching output devices mid-meeting ends that track. **Tell people you are recording**: consent rules differ by place.
 
 ## How it works
 

@@ -40,6 +40,7 @@ class SettingsDialog(QDialog):
         self.hotkey = QLineEdit(cfg.get("hotkey", "f9"))
         self.snip_hotkey = QLineEdit(cfg.get("snip_hotkey", "ctrl+alt+s"))
         self.paste_hotkey = QLineEdit(cfg.get("paste_hotkey", "ctrl+alt+v"))
+        self.meeting_hotkey = QLineEdit(cfg.get("meeting_hotkey", "f8"))
         self.colors = QLineEdit(format_colors(cfg.get("colors", DEFAULT_COLORS)))
         self.lazy = QCheckBox("Open the mic only while the key is held (slower start, no always-on mic)")
         self.lazy.setChecked(cfg.get("lazy_mic", False))
@@ -51,6 +52,7 @@ class SettingsDialog(QDialog):
         form.addRow("", QLabel("Hold to talk. e.g. f9, ctrl+shift+space, ctrl_r"))
         form.addRow("Snip hotkey", self.snip_hotkey)
         form.addRow("Paste-all hotkey", self.paste_hotkey)
+        form.addRow("Meeting record hotkey", self.meeting_hotkey)
         form.addRow("Snip colours", self.colors)
         form.addRow("", QLabel("Name=#hex, comma separated (max 9). Keys 1-9 pick them in the editor."))
         form.addRow("", self.lazy)
@@ -72,7 +74,7 @@ class SettingsDialog(QDialog):
     def save(self):
         try:
             out = validate({"model": self.model.text(), "hotkey": self.hotkey.text(), "snip_hotkey": self.snip_hotkey.text(),
-                            "paste_hotkey": self.paste_hotkey.text(), "colors": self.colors.text(),
+                            "paste_hotkey": self.paste_hotkey.text(), "meeting_hotkey": self.meeting_hotkey.text(), "colors": self.colors.text(),
                             "lazy_mic": self.lazy.isChecked(), "no_space": self.nospace.isChecked()})
         except SettingsError as e:
             QMessageBox.warning(self, e.title, e.text)

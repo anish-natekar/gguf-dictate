@@ -135,3 +135,15 @@ def test_icon_is_never_empty_even_without_a_theme_icon(tray):
     for state in ("stopped", "loading", "running"):
         tray.set_state(state)
         assert not tray.icon.icon().isNull()
+
+
+def test_menu_has_meeting_entries_that_follow_recording_state(qtbot, cfgdir):
+    c, state = Calls(), {"rec": False}
+    t = Tray(c, count=lambda: 0, recording=lambda: state["rec"])
+    t.refresh()
+    action(t, "Open meeting recorder").trigger()
+    action(t, "Meetings...").trigger()
+    assert [x[0] for x in c.log] == ["toggle_meeting", "show_meetings"]
+    state["rec"] = True
+    t.refresh()
+    assert "Meeting recording in progress (save it from the pill)" in labels(t) and not any(x.startswith("Open meeting") for x in labels(t))

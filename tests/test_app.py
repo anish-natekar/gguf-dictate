@@ -202,3 +202,63 @@ def test_quit_stops_everything(rig, qtbot):
     qtbot.waitUntil(lambda: rig.app.state == "running", timeout=3000)
     rig.app.quit()
     assert rig.listeners[0].stopped and rig.quit == [1] and rig.app.state == "stopped"
+
+
+class Meetings:
+    def __init__(self):
+        self.log = []
+
+    def set_model(self, m):
+        self.log.append(("model", m is not None))
+
+    def toggle(self):
+        self.log.append(("toggle",))
+
+    def show_window(self):
+        self.log.append(("window",))
+
+    def shutdown(self):
+        self.log.append(("shutdown",))
+
+
+@pytest.fixture
+def mrig(tmp_path, monkeypatch, qtbot):
+    r = Rig(tmp_path, monkeypatch)
+    r.meetings = r.app.meetings = Meetings()
+    return r
+
+
+def test_meeting_command_toggles_recording(mrig):
+    mrig.app.on_command("meeting")
+    mrig.app.toggle_meeting()
+    mrig.app.show_meetings()
+    assert mrig.meetings.log == [("toggle",), ("toggle",), ("window",)]
+
+
+def test_meeting_hotkey_reaches_the_overlay_channel(mrig, qtbot):
+    mrig.app.start()
+    qtbot.waitUntil(lambda: mrig.app.state == "running", timeout=3000)
+    router = mrig.listeners[0].router
+    for k in ("f8",):
+        router.press(k)
+    assert "meeting" in mrig.overlay.msgs
+
+
+def test_model_goes_to_meetings_on_load_and_is_withdrawn_on_stop(mrig, qtbot):
+    mrig.app.start()
+    qtbot.waitUntil(lambda: mrig.app.state == "running", timeout=3000)
+    mrig.app.stop()
+    assert mrig.meetings.log == [("model", True), ("model", False)]
+
+
+def test_quit_stops_a_meeting_in_progress(mrig):
+    mrig.app.quit()
+    assert ("shutdown",) in mrig.meetings.log and mrig.quit
+
+
+def test_everything_still_works_without_meetings(rig):
+    rig.app.on_command("meeting")
+    rig.app.toggle_meeting()
+    rig.app.show_meetings()
+    rig.app.quit()
+    assert rig.quit

@@ -15,7 +15,7 @@ def test_aurora_is_valid_rgb_and_wraps():
     assert aurora(0.0) == pytest.approx(aurora(1.0))
 
 
-@pytest.mark.parametrize("msg", ["snip", "paste", "cancel", "ctrlv", "note red button overlaps"])
+@pytest.mark.parametrize("msg", ["snip", "paste", "cancel", "ctrlv", "meeting", "note red button overlaps"])
 def test_non_animation_messages_are_passed_through_untouched(msg):
     m = OverlayModel()
     assert m.handle(msg) == ("extra", msg)

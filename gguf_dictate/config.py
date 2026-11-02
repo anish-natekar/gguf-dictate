@@ -17,6 +17,10 @@ def queue_dir():
     return user_data_path("dictate", appauthor=False) / "queue"
 
 
+def meetings_dir():
+    return user_data_path("dictate", appauthor=False) / "meetings"
+
+
 def runtime_dir():
     """Per-user 0700 directory for the log and lock files (never a shared, predictable /tmp name)."""
     if os.name == "nt":

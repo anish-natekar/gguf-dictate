@@ -9,11 +9,11 @@ class Dictation:
     """model.run(audio).text -> str; mic.start()/stop(); keys.type_text(text); notify(msg) drives the overlay."""
 
     def __init__(self, model, mic, keys, notify, editor_open, talk, snip, paste,
-                 no_space=False, log=print, spawn=thread_spawn, sleep=time.sleep):
+                 no_space=False, meeting=None, log=print, spawn=thread_spawn, sleep=time.sleep):
         self.model, self.keys, self.notify, self.editor_open, self.no_space, self.log = model, keys, notify, editor_open, no_space, log
         self.busy = threading.Lock()
         self.state = DictationState(mic, self._notify, self._process, spawn)
-        self.router = HotkeyRouter(talk, snip, paste, self.state, self._notify, editor_open, sleep)
+        self.router = HotkeyRouter(talk, snip, paste, self.state, self._notify, editor_open, sleep, meeting)
 
     def _notify(self, msg):
         if msg == "rec":
