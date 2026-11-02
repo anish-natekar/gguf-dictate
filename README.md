@@ -49,15 +49,30 @@ Models are not included in this repo.
 .venv/bin/python dictate.py --model /path/to/model.gguf
 ```
 
-Wait for `model ready`, click into any text box, then **hold `ctrl+alt+space`**, talk, and release.
+Wait for `model ready`, click into any text box, then **hold `f9`**, talk, and release.
 On later runs you can omit `--model` (the path is saved in `~/.config/dictate/config.json`).
 
 | Flag | Meaning |
 | --- | --- |
 | `--model PATH` | Path to a `.gguf` model (remembered). |
-| `--hotkey KEYS` | Hold-to-talk keys joined with `+`, e.g. `ctrl+alt+space`, `f9`, `ctrl_r`. Default `ctrl+alt+space`. |
+| `--hotkey KEYS` | Hold-to-talk keys joined with `+`, e.g. `f9`, `ctrl_r`. Default `f9`. |
 | `--lazy-mic` | Open the microphone only while the key is held (adds ~100 ms; avoids the always-on mic indicator). |
 | `--no-space` | Don't append a space after each phrase. |
+
+## Top-bar icon (GNOME)
+
+```bash
+/usr/bin/python3 tray.py
+```
+
+Adds a microphone icon to the top bar (uses the system Python's GTK + AppIndicator, stock on Ubuntu; the
+AppIndicator shell extension must be enabled). The menu has Start/Stop, **Model** (choose a `.gguf`, or pick a recent one),
+**Settings** (model path, hotkey, mic and spacing options), **How to use / shortcuts**, and **About**.
+It starts and restarts `dictate.py` for you.
+
+The tray also shows a click-through, transparent **waveform pill** at the bottom of the screen: bars move with your
+voice while the key is held, then a spinner loops while the model transcribes. It needs
+`sudo apt install python3-gi-cairo`. Without the tray, `dictate.py` still works (no overlay).
 
 ## How it works
 

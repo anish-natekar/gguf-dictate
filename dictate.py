@@ -7,6 +7,7 @@ Local STT via transcribe.cpp on any GGUF (Parakeet / Whisper / ...). X11 only.
 """
 import argparse
 import json
+import socket
 import subprocess
 import sys
 import threading
@@ -23,6 +24,18 @@ ALIASES = {"ctrl_l": "ctrl", "ctrl_r": "ctrl", "alt_l": "alt", "alt_r": "alt", "
            "shift_l": "shift", "shift_r": "shift", "cmd_l": "cmd", "cmd_r": "cmd"}
 
 
+_overlay = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+_overlay.setblocking(False)
+
+
+def notify(msg):
+    """Tell the tray's waveform overlay what's happening; harmless if it isn't running."""
+    try:
+        _overlay.sendto(msg.encode(), b"\0dictate-overlay")
+    except OSError:
+        pass
+
+
 def load_config():
     try:
         return json.loads(CONFIG.read_text())
@@ -36,8 +49,12 @@ def save_config(cfg):
 
 
 def key_name(key):
-    name = key.char.lower() if isinstance(key, keyboard.KeyCode) and key.char else getattr(key, "name", str(key))
-    return ALIASES.get(name, name)
+    return key.char.lower() if isinstance(key, keyboard.KeyCode) and key.char else getattr(key, "name", str(key))
+
+
+def held(combo, down):
+    """Every wanted key is down; 'ctrl' matches either side, 'ctrl_r' only the right one."""
+    return all(k in down or any(ALIASES.get(d) == k for d in down) for k in combo)
 
 
 class Mic:
@@ -66,6 +83,7 @@ class Mic:
             with self.lock:
                 if self.recording:
                     self.buf.append(chunk)
+                    notify(f"lvl {float(np.sqrt(np.mean(chunk * chunk))):.5f}")
                 else:
                     self.pre = np.concatenate([self.pre, chunk])[-self.PREROLL:]
 
@@ -93,31 +111,44 @@ def main():
     cfg = load_config()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default=cfg.get("model"), help="path to a .gguf model (remembered after first use)")
-    ap.add_argument("--hotkey", default=cfg.get("hotkey", "ctrl+alt+space"),
-                    help="hold to talk, e.g. ctrl+alt+space, f9, ctrl_r (default: %(default)s)")
-    ap.add_argument("--lazy-mic", action="store_true", help="open the mic only while the key is held (adds ~100ms)")
-    ap.add_argument("--no-space", action="store_true", help="don't append a space after each phrase")
+    ap.add_argument("--hotkey", default=cfg.get("hotkey", "f9"),
+                    help="hold to talk, e.g. f9, ctrl+shift+space, ctrl_r (default: %(default)s)")
+    ap.add_argument("--lazy-mic", action="store_true", default=cfg.get("lazy_mic", False), help="open the mic only while the key is held (adds ~100ms)")
+    ap.add_argument("--no-space", action="store_true", default=cfg.get("no_space", False), help="don't append a space after each phrase")
     args = ap.parse_args()
     if not args.model or not Path(args.model).expanduser().is_file():
         sys.exit("pass --model /path/to/model.gguf")
     model_path = str(Path(args.model).expanduser().resolve())
-    save_config({"model": model_path, "hotkey": args.hotkey})
+    save_config({**cfg, "model": model_path, "hotkey": args.hotkey})
 
     transcribe_cpp.set_log_callback(lambda lvl, msg: print(msg, file=sys.stderr) if lvl >= 3 else None)
     t = time.time()
     model = transcribe_cpp.Model(model_path)
     session = model.session()
     session.run(np.zeros(RATE, np.float32))  # warm up: first GPU run compiles shaders
-    print(f"model ready in {time.time() - t:.1f}s | hold [{args.hotkey}] to talk | Ctrl+C to quit", flush=True)
+    print(f"{Path(model_path).name} ready in {time.time() - t:.1f}s | hold [{args.hotkey}] to talk | Ctrl+C to quit", flush=True)
 
-    combo = {ALIASES.get(k, k) for k in args.hotkey.lower().replace(" ", "").split("+")}
+    combo = set(args.hotkey.lower().replace(" ", "").split("+"))
     mic, down, busy = Mic(args.lazy_mic), set(), threading.Lock()
     state = {"active": False}
 
     def work(audio):
+        try:
+            transcribe(audio)
+        finally:
+            notify("idle")
+
+    def transcribe(audio):
         with busy:
             if len(audio) < 0.2 * RATE:
+                print("too short, ignored", flush=True)
                 return
+            peak = float(np.abs(audio).max())
+            if peak < 0.005:
+                print(f"mic is silent (peak {peak:.4f}): check input device / volume / mute", flush=True)
+                return
+            if peak < 0.5:  # quiet mic: normalise so the model gets a healthy level
+                audio = audio * (0.7 / peak)
             t0 = time.time()
             text = session.run(audio).text.strip()
             print(f"[{len(audio) / RATE:.1f}s audio -> {(time.time() - t0) * 1000:.0f}ms] {text}", flush=True)
@@ -126,14 +157,17 @@ def main():
 
     def on_press(key):
         down.add(key_name(key))
-        if not state["active"] and combo <= down:
+        if not state["active"] and held(combo, down):
             state["active"] = True
+            print("recording...", flush=True)
+            notify("rec")
             mic.start()
 
     def on_release(key):
         down.discard(key_name(key))
-        if state["active"] and not combo <= down:
+        if state["active"] and not held(combo, down):
             state["active"] = False
+            notify("busy")
             threading.Thread(target=lambda a=mic.stop(): work(a), daemon=True).start()
 
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
