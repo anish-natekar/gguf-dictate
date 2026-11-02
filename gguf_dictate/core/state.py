@@ -14,7 +14,7 @@ TARGET_PEAK = 0.7
 PASTE_SETTLE_S = 0.15
 
 
-def _thread_spawn(fn, *args):
+def thread_spawn(fn, *args):
     threading.Thread(target=fn, args=args, daemon=True).start()
 
 
@@ -25,7 +25,7 @@ class DictationState:
     The overlay is hidden ('idle') only when nothing is recording and nothing is still queued.
     """
 
-    def __init__(self, mic, notify, process, spawn=_thread_spawn):
+    def __init__(self, mic, notify, process, spawn=thread_spawn):
         self.mic, self.notify, self.process, self.spawn = mic, notify, process, spawn
         self.active, self.source, self.pending = False, "key", 0
         self.lock = threading.Lock()

@@ -18,8 +18,9 @@ from pynput import keyboard
 
 from . import ipc
 from .config import editor_flag, load_config, save_config
+from .core.dictation import Dictation
 from .core.recorder import Recorder
-from .core.state import RATE, DictationState, HotkeyRouter, prepare_audio, route_text
+from .core.state import RATE
 from .platform.audio import SoundDeviceSource
 from .platform.linux import XdotoolKeys
 
@@ -56,33 +57,11 @@ def main():
     session.run(np.zeros(RATE, np.float32))  # warm up: first GPU run compiles shaders
     print(f"{Path(model_path).name} ready in {time.time() - t:.1f}s | hold [{args.hotkey}] to talk | Ctrl+C to quit", flush=True)
 
-    flag, busy, keys = editor_flag(), threading.Lock(), XdotoolKeys()
-
-    def process(audio):
-        with busy:
-            audio, why = prepare_audio(audio)
-            if audio is None:
-                print(why if why == "too short" else f"mic is {why}: check input device / volume / mute", flush=True)
-                return
-            t0 = time.time()
-            text = session.run(audio).text.strip()
-            print(f"[{len(audio) / RATE:.1f}s audio -> {(time.time() - t0) * 1000:.0f}ms] {text}", flush=True)
-            routed = route_text(text, flag.exists(), args.no_space)   # editor open: a voice note, not typing
-            if routed and routed[0] == "note":
-                notify("note " + routed[1])
-            elif routed:
-                keys.type_text(routed[1])
-
-    def notify_and_log(msg):
-        if msg == "rec":
-            print("recording...", flush=True)
-        elif msg == "cancel":
-            print("Esc: closing the snip editor", flush=True)
-        notify(msg)
-
+    flag = editor_flag()
     mic = Recorder(SoundDeviceSource(), on_level=lambda lvl: notify(f"lvl {lvl:.5f}"), lazy=args.lazy_mic)
-    state = DictationState(mic, notify_and_log, process)
-    router = HotkeyRouter(args.hotkey, args.snip_hotkey, args.paste_hotkey, state, notify_and_log, flag.exists)
+    dictation = Dictation(session, mic, XdotoolKeys(), notify, flag.exists, args.hotkey, args.snip_hotkey, args.paste_hotkey,
+                          no_space=args.no_space, log=lambda m: print(m, flush=True))
+    state, router = dictation.state, dictation.router
 
     ctl = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)   # the snip editor's Speak button talks to us here
     try:
