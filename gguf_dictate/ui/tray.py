@@ -69,7 +69,8 @@ class Tray:
 
     def model_menu(self, cfg):
         model = cfg.get("model")
-        sub = self.menu.addMenu(f"Model: {Path(model).name if model else 'none'}")
+        sub = self.model_submenu = QMenu(f"Model: {Path(model).name if model else 'none'}", self.menu)      # kept on self: PySide may drop it otherwise
+        self.menu.addMenu(sub)
         self.add("Choose .gguf file...", self.actions.choose_model, menu=sub)
         recent = [p for p in cfg.get("recent", []) if Path(p).is_file()]
         if recent:
