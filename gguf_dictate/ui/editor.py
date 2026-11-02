@@ -3,7 +3,6 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from ..config import editor_flag
 from ..core.editor_model import EditorModel
 
 BLUE = QColor(10, 133, 255)
@@ -95,10 +94,9 @@ class Canvas(QWidget):
 
 
 class EditorView(QWidget):
-    def __init__(self, shot, colors, on_done, speak, flag=None, fullscreen=True, on_close=None):
+    def __init__(self, shot, colors, on_done, speak, fullscreen=True, on_close=None):
         super().__init__()
         self.shot, self.on_done, self.speak, self.fullscreen, self.on_close = shot, on_done, speak, fullscreen, on_close
-        self.flag = flag or editor_flag()
         self.model = EditorModel(colors)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setStyleSheet(STYLE)
@@ -150,14 +148,8 @@ class EditorView(QWidget):
         self.activateWindow()
         self.grabKeyboard()
 
-    def showEvent(self, e):
-        self.flag.parent.mkdir(parents=True, exist_ok=True)
-        self.flag.touch()
-        super().showEvent(e)
-
     def closeEvent(self, e):
         self.releaseKeyboard()
-        self.flag.unlink(missing_ok=True)
         super().closeEvent(e)
         if self.on_close:
             self.on_close()

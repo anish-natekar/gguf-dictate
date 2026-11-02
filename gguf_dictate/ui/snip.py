@@ -4,7 +4,7 @@ from PySide6.QtGui import QCursor, QGuiApplication
 from ..config import DEFAULT_COLORS, MAX_COLORS
 from ..core.pasting import Pasting
 from ..notes import Queue
-from ..platform.linux import NotifySend, XdotoolKeys
+from ..platform import default_keys, default_notifier
 from ..platform.qt import QtClipboard, QtClock
 from .editor import EditorView
 
@@ -22,10 +22,11 @@ def open_editor(shot, colors, on_done, speak, on_close):
 
 
 class SnipController:
-    def __init__(self, on_change, speak, queue=None, pasting=None, grab=grab_screen, editor_factory=open_editor):
+    def __init__(self, on_change, speak, queue=None, pasting=None, grab=grab_screen, editor_factory=open_editor, keys=None, notifier=None):
         self.queue, self.on_change, self.speak = queue or Queue(), on_change, speak
         self.grab, self.editor_factory, self.editor = grab, editor_factory, None
-        self.pasting = pasting or Pasting(self.queue, QtClipboard(), XdotoolKeys(), NotifySend(), QtClock(), on_change, self.editor_open)
+        self.pasting = pasting or Pasting(self.queue, QtClipboard(), keys or default_keys(), notifier or default_notifier(), QtClock(), on_change,
+                                          self.editor_open)
 
     def editor_open(self):
         return self.editor is not None

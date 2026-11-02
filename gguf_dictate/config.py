@@ -1,9 +1,9 @@
-"""Paths, config file and constants shared by the dictation process and the tray."""
+"""Paths, config file and constants shared by the app."""
 import json
 import os
 from pathlib import Path
 
-from platformdirs import user_config_path, user_data_path
+from platformdirs import user_config_path, user_data_path, user_runtime_path
 
 DEFAULT_COLORS = [["Red", "#ff3b30"], ["Blue", "#0a84ff"], ["Green", "#30d158"], ["Yellow", "#ffd60a"], ["Purple", "#bf5af2"]]
 MAX_COLORS = 9
@@ -18,9 +18,12 @@ def queue_dir():
 
 
 def runtime_dir():
-    """Per-user 0700 directory for the log, lock and flag files (never a shared, predictable /tmp name)."""
-    base = os.environ.get("XDG_RUNTIME_DIR")
-    d = Path(base) / "dictate" if base else Path(f"/tmp/dictate-{os.getuid()}")
+    """Per-user 0700 directory for the log and lock files (never a shared, predictable /tmp name)."""
+    if os.name == "nt":
+        d = user_runtime_path("dictate", appauthor=False)
+    else:
+        base = os.environ.get("XDG_RUNTIME_DIR")
+        d = Path(base) / "dictate" if base else Path(f"/tmp/dictate-{os.getuid()}")
     d.mkdir(mode=0o700, parents=True, exist_ok=True)
     return d
 
@@ -31,11 +34,6 @@ def log_path():
 
 def lock_path():
     return runtime_dir() / "tray.lock"
-
-
-def editor_flag():
-    """Exists while the snip editor is open: dictated text then becomes a voice note instead of being typed."""
-    return runtime_dir() / "editor-open"
 
 
 def load_config(path=None):

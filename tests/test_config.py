@@ -22,7 +22,7 @@ def test_runtime_dir_is_private(tmp_path, monkeypatch):
     d = config.runtime_dir()
     assert d == tmp_path / "dictate"
     assert stat.S_IMODE(d.stat().st_mode) == 0o700
-    assert config.editor_flag().parent == d and config.log_path().parent == d
+    assert config.log_path().parent == d
 
 
 def test_default_colors_are_name_hex_pairs():

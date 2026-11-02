@@ -29,8 +29,8 @@ def test_runtime_dir_falls_back_to_private_tmp_dir(tmp_path, monkeypatch):
 
 def test_runtime_files_share_one_directory(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
-    assert {config.log_path().parent, config.lock_path().parent, config.editor_flag().parent} == {tmp_path / "dictate"}
-    assert (config.log_path().name, config.lock_path().name, config.editor_flag().name) == ("dictate.log", "tray.lock", "editor-open")
+    assert {config.log_path().parent, config.lock_path().parent} == {tmp_path / "dictate"}
+    assert (config.log_path().name, config.lock_path().name) == ("dictate.log", "tray.lock")
 
 
 def test_default_colors_unique_named_and_within_max():

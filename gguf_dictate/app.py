@@ -14,7 +14,6 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QFileDialog
 
-from . import __version__  # noqa: F401
 from .config import DEFAULT_COLORS, load_config, lock_path, log_path, save_config
 from .core.dictation import Dictation
 from .core.lock import SingleInstance
@@ -197,18 +196,18 @@ def main():
     qapp = QApplication(sys.argv)
     qapp.setQuitOnLastWindowClosed(False)
     from .model import load_session
+    from .platform import default_keys, default_notifier
     from .platform.audio import SoundDeviceSource
     from .platform.keys import start_listener
-    from .platform.linux import XdotoolKeys
     from .ui import dialogs
     from .ui.overlay import Overlay
     from .ui.settings import SettingsDialog
     from .ui.snip import SnipController
     from .ui.tray import Tray
 
-    holder = {}
-    snip = SnipController(on_change=lambda: holder["tray"].refresh(), speak=lambda cmd: holder["app"].speak(cmd))
-    tray = Tray(None, snip.count)
+    tray = Tray(None, lambda: snip.count())
+    keys = default_keys()
+    snip = SnipController(on_change=lambda: tray.refresh(), speak=lambda cmd: app.speak(cmd), keys=keys, notifier=default_notifier(icon=tray.icon))
     overlay = Overlay()
     dialog = {}
 
@@ -219,9 +218,8 @@ def main():
         d.raise_()
         d.activateWindow()
 
-    app = App(load_session, SoundDeviceSource, XdotoolKeys(), snip, overlay, tray, start_listener, dialogs.show_error, open_settings, qapp.quit,
+    app = App(load_session, SoundDeviceSource, keys, snip, overlay, tray, start_listener, dialogs.show_error, open_settings, qapp.quit,
               log=lambda m: print(m, flush=True), show_help=lambda hk: dialogs.show_help(hk, log_path()), show_about=dialogs.show_about)
-    holder.update(app=app, tray=tray)
     tray.actions = app
     tray.refresh()
     overlay.extra = app.on_command

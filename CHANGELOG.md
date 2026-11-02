@@ -4,6 +4,8 @@
 - UI ported from GTK to Qt (PySide6); one process instead of tray + dictation subprocess. No system GTK packages needed.
 - Microphone via sounddevice (`libportaudio2`) instead of `arecord`.
 - Config/data paths via platformdirs; single-instance lock; `dictate` and `dictate-tray` are now the same app.
+- Windows code paths (pynput typing/paste, Qt toasts, platformdirs runtime dir); not yet tested on real hardware. CI has a non-blocking Windows job.
+- Removed the unused editor flag file; README now has a support/tested matrix and per-OS setup.
 - Logic split into `core/` (tested without a GUI) and `platform/` adapters; test suite grew from 26 to 245 tests.
 
 ## 0.2.0

@@ -20,12 +20,11 @@ def env(qtbot, tmp_path):
     shot = QPixmap(800, 600)
     shot.fill(QColor("#222222"))
     done, spoke = [], []
-    flag = tmp_path / "editor-open"
-    view = EditorView(shot, COLORS, lambda surf, notes: done.append((surf, notes)), spoke.append, flag=flag, fullscreen=False)
+    view = EditorView(shot, COLORS, lambda surf, notes: done.append((surf, notes)), spoke.append, fullscreen=False)
     qtbot.addWidget(view)
     view.show()
     qtbot.waitExposed(view)
-    view.done, view.spoke, view.flag = done, spoke, flag
+    view.done, view.spoke = done, spoke
     return view
 
 
@@ -38,12 +37,6 @@ def drag(view, a, b):
 
 def test_toolbar_has_a_button_per_model_item(env):
     assert len(env.buttons) == len(env.model.items) == 11
-
-
-def test_flag_exists_while_open_and_removed_on_close(env, qtbot):
-    assert env.flag.exists()
-    env.close()
-    assert not env.flag.exists()
 
 
 def test_number_keys_pick_colours_and_0_returns_to_box_tool(env, qtbot):
@@ -80,7 +73,7 @@ def test_save_returns_cropped_png_with_stroke_pixels_and_notes(env, qtbot, tmp_p
     assert (img.width(), img.height()) == (200, 150)
     assert QColor(img.pixel(100, 50)).red() > 200 and QColor(img.pixel(100, 50)).green() < 60     # stroke at (200,150) -> (100,50)
     assert QColor(img.pixel(5, 5)).name() == "#222222"                                           # untouched background
-    assert not env.isVisible() and not env.flag.exists()
+    assert not env.isVisible()
 
 
 def test_save_without_box_captures_whole_screenshot(env, qtbot, tmp_path):
@@ -170,7 +163,7 @@ def test_on_close_callback_runs_when_editor_closes(qtbot, tmp_path):
 
     from gguf_dictate.ui.editor import EditorView
     closed = []
-    v = EditorView(QPixmap(200, 120), [["Red", "#ff0000"]], lambda *a: None, lambda c: None, flag=tmp_path / "flag", fullscreen=False,
+    v = EditorView(QPixmap(200, 120), [["Red", "#ff0000"]], lambda *a: None, lambda c: None, fullscreen=False,
                    on_close=lambda: closed.append(1))
     qtbot.addWidget(v)
     v.show()
