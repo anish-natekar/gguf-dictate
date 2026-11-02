@@ -22,7 +22,7 @@ It does **not** (yet) do Wayland, Windows/macOS, streaming/partial results, or t
 System packages (Debian/Ubuntu):
 
 ```bash
-sudo apt install xdotool alsa-utils
+sudo apt install xdotool libportaudio2
 ```
 
 Python 3.9+. From source (see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup):
@@ -36,7 +36,7 @@ python3 -m venv --system-site-packages .venv
 ### Install with pipx (recommended)
 
 ```bash
-sudo apt install xdotool alsa-utils python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1 pipx
+sudo apt install xdotool libportaudio2 python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1 pipx
 pipx install --system-site-packages git+https://github.com/anish-natekar/gguf-dictate.git
 dictate-tray --install-desktop --autostart   # app-menu launcher + start at login
 dictate-tray                                 # or: dictate --model /path/to/model.gguf (no tray)
@@ -111,7 +111,7 @@ Hotkeys and colours are in Settings.
 
 ## How it works
 
-1. `arecord` streams 16 kHz mono audio; a rolling 0.25 s buffer keeps the first syllable from being clipped.
+1. PortAudio (`sounddevice`) streams 16 kHz mono audio; a rolling 0.25 s buffer keeps the first syllable from being clipped.
 2. [`pynput`](https://pypi.org/project/pynput/) watches for the hotkey (it observes keys, it does not grab them).
 3. On release, the audio goes to transcribe.cpp (`transcribe-cpp` on PyPI, bundled CPU + Vulkan).
 4. `xdotool type` types the result into the focused window.

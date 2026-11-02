@@ -19,7 +19,9 @@ from pynput import keyboard
 
 from . import ipc
 from .config import editor_flag, load_config, save_config
+from .core.recorder import Recorder
 from .core.state import RATE, DictationState, HotkeyRouter, prepare_audio, route_text
+from .platform.audio import SoundDeviceSource
 
 
 def notify(msg):
@@ -29,52 +31,6 @@ def notify(msg):
 
 def key_name(key):
     return key.char.lower() if isinstance(key, keyboard.KeyCode) and key.char else getattr(key, "name", str(key))
-
-
-class Mic:
-    """arecord piped as raw float32; keeps a rolling buffer so the first syllable isn't lost."""
-
-    PREROLL = int(0.25 * RATE)
-
-    def __init__(self, lazy):
-        self.lazy, self.proc, self.buf, self.lock = lazy, None, [], threading.Lock()
-        self.recording, self.pre = False, np.zeros(0, np.float32)
-        if not lazy:
-            self._spawn()
-
-    def _spawn(self):
-        self.proc = subprocess.Popen(
-            ["arecord", "-q", "-t", "raw", "-f", "FLOAT_LE", "-r", str(RATE), "-c", "1"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
-        threading.Thread(target=self._read, args=(self.proc,), daemon=True).start()
-
-    def _read(self, proc):
-        while True:
-            data = proc.stdout.read(1280)  # 20 ms
-            if not data:
-                return
-            chunk = np.frombuffer(data[: len(data) // 4 * 4], np.float32)
-            with self.lock:
-                if self.recording:
-                    self.buf.append(chunk)
-                    notify(f"lvl {float(np.sqrt(np.mean(chunk * chunk))):.5f}")
-                else:
-                    self.pre = np.concatenate([self.pre, chunk])[-self.PREROLL:]
-
-    def start(self):
-        if self.lazy:
-            self._spawn()
-        with self.lock:
-            self.buf, self.recording = [self.pre], True
-
-    def stop(self):
-        with self.lock:
-            self.recording = False
-            audio = np.concatenate(self.buf) if self.buf else np.zeros(0, np.float32)
-            self.buf = []
-        if self.lazy and self.proc:
-            self.proc.terminate()
-        return audio
 
 
 def type_text(text):
@@ -126,7 +82,8 @@ def main():
             print("recording...", flush=True)
         notify(msg)
 
-    state = DictationState(Mic(args.lazy_mic), notify_and_log, process)
+    mic = Recorder(SoundDeviceSource(), on_level=lambda lvl: notify(f"lvl {lvl:.5f}"), lazy=args.lazy_mic)
+    state = DictationState(mic, notify_and_log, process)
     router = HotkeyRouter(args.hotkey, args.snip_hotkey, args.paste_hotkey, state, notify, flag.exists)
 
     ctl = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)   # the snip editor's Speak button talks to us here

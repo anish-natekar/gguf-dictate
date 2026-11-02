@@ -5,7 +5,7 @@ Thanks for helping! This is a small project; keep changes small and focused.
 ## Dev setup
 
 ```bash
-sudo apt install xdotool alsa-utils python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1
+sudo apt install xdotool libportaudio2 python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1
 git clone https://github.com/anish-natekar/gguf-dictate.git && cd gguf-dictate
 python3 -m venv --system-site-packages .venv      # system site packages = GTK bindings
 .venv/bin/pip install -e ".[dev]"
