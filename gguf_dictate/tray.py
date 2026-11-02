@@ -3,7 +3,6 @@
 Needs python3-gi + AyatanaAppIndicator3 (stock on Ubuntu GNOME) and manages the dictation
 process (`python -m gguf_dictate.dictate`) as a child.
 """
-import fcntl
 import shutil
 import signal
 import subprocess
@@ -19,6 +18,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import __version__, hotkeys, ipc  # noqa: E402
 from .config import DEFAULT_COLORS, MAX_COLORS, load_config, lock_path, log_path, save_config  # noqa: E402
+from .core.lock import SingleInstance  # noqa: E402
 from .overlay import Overlay  # noqa: E402
 from .snip import Snip  # noqa: E402
 
@@ -321,11 +321,9 @@ def install_desktop():
 def main():
     if "--install-desktop" in sys.argv:
         return install_desktop()
-    lock = open(lock_path(), "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        raise SystemExit("dictate tray is already running") from None
+    lock = SingleInstance(lock_path())
+    if not lock.acquire():
+        raise SystemExit("dictate tray is already running")
     app = Tray()
     for sig in (signal.SIGINT, signal.SIGTERM):
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (app.quit(), False)[1])

@@ -2,7 +2,7 @@
 import json
 import time
 
-from .config import QUEUE_DIR
+from .config import queue_dir
 
 
 def format_notes(n, notes):
@@ -20,7 +20,7 @@ class Queue:
     """Saved snips: <ns>.png plus <ns>.json (the notes), oldest first."""
 
     def __init__(self, directory=None):
-        self.dir = directory or QUEUE_DIR
+        self.dir = directory or queue_dir()
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def items(self):

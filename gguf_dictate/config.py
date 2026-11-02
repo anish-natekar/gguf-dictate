@@ -3,11 +3,18 @@ import json
 import os
 from pathlib import Path
 
-CONFIG = Path.home() / ".config" / "dictate" / "config.json"
-QUEUE_DIR = Path.home() / ".local" / "share" / "dictate" / "queue"
+from platformdirs import user_config_path, user_data_path
 
 DEFAULT_COLORS = [["Red", "#ff3b30"], ["Blue", "#0a84ff"], ["Green", "#30d158"], ["Yellow", "#ffd60a"], ["Purple", "#bf5af2"]]
 MAX_COLORS = 9
+
+
+def config_file():
+    return user_config_path("dictate", appauthor=False) / "config.json"
+
+
+def queue_dir():
+    return user_data_path("dictate", appauthor=False) / "queue"
 
 
 def runtime_dir():
@@ -33,13 +40,13 @@ def editor_flag():
 
 def load_config(path=None):
     try:
-        return json.loads((path or CONFIG).read_text())
+        return json.loads((path or config_file()).read_text())
     except (OSError, ValueError):
         return {}
 
 
 def save_config(cfg, path=None):
-    path = path or CONFIG
+    path = path or config_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(cfg, indent=2))
