@@ -47,3 +47,6 @@ class Recorder:
         if self.lazy:
             self.source.close()
         return audio
+
+    def close(self):
+        self.source.close()

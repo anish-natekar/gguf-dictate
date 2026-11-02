@@ -163,3 +163,16 @@ def test_queue_badge_text(env):
     assert "3" in env.queue_badge.text()
     env.set_queued(0)
     assert env.queue_badge.isHidden()
+
+
+def test_on_close_callback_runs_when_editor_closes(qtbot, tmp_path):
+    from PySide6.QtGui import QPixmap
+
+    from gguf_dictate.ui.editor import EditorView
+    closed = []
+    v = EditorView(QPixmap(200, 120), [["Red", "#ff0000"]], lambda *a: None, lambda c: None, flag=tmp_path / "flag", fullscreen=False,
+                   on_close=lambda: closed.append(1))
+    qtbot.addWidget(v)
+    v.show()
+    v.close()
+    assert closed == [1]

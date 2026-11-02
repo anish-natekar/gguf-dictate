@@ -1,13 +1,15 @@
 """System-tray icon and menu. `actions` supplies the behaviour (toggle, choose_model, set_model, ...)."""
 from pathlib import Path
 
-from PySide6.QtGui import QAction, QActionGroup, QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from ..config import load_config
 
 ICONS = {"stopped": "microphone-disabled-symbolic", "loading": "microphone-sensitivity-low-symbolic",
          "running": "microphone-sensitivity-high-symbolic"}
+DOT = {"stopped": "#8e8e93", "loading": "#ffd60a", "running": "#30d158"}
 LABELS = {"stopped": "Stopped", "loading": "Loading model...", "running": "Ready"}
 
 
@@ -18,7 +20,8 @@ class Tray:
         self.icon.setToolTip("Dictate")
         self.menu = QMenu()
         self.icon.setContextMenu(self.menu)
-        self.refresh()
+        if actions:      # the app sets .actions once it exists, then refreshes
+            self.refresh()
 
     def add(self, label, cb=None, enabled=True, menu=None):
         a = QAction(label, self.menu)
@@ -48,7 +51,21 @@ class Tray:
         self.add("About", a.about)
         m.addSeparator()
         self.add("Quit", a.quit)
-        self.icon.setIcon(QIcon.fromTheme(ICONS[self.state], QIcon.fromTheme("audio-input-microphone")))
+        self.icon.setIcon(self.make_icon())
+
+    def make_icon(self):
+        icon = QIcon.fromTheme(ICONS[self.state], QIcon.fromTheme("audio-input-microphone"))
+        if not icon.isNull():
+            return icon
+        pm = QPixmap(32, 32)      # theme without a microphone icon: a state-coloured dot
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor(DOT[self.state]))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(4, 4, 24, 24)
+        p.end()
+        return QIcon(pm)
 
     def model_menu(self, cfg):
         model = cfg.get("model")

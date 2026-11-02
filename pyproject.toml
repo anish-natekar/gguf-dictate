@@ -9,23 +9,23 @@ description = "Local push-to-talk dictation and voice-annotated screenshot snips
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-dependencies = ["numpy", "platformdirs", "pynput", "sounddevice", "transcribe-cpp"]
+dependencies = ["numpy", "platformdirs", "pynput", "PySide6-Essentials", "sounddevice", "transcribe-cpp"]
 classifiers = [
     "Operating System :: POSIX :: Linux",
-    "Environment :: X11 Applications :: GTK",
+    "Environment :: X11 Applications :: Qt",
     "License :: OSI Approved :: MIT License",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "pytest-qt", "ruff"]
 
 [project.urls]
 Homepage = "https://github.com/anish-natekar/gguf-dictate"
 Issues = "https://github.com/anish-natekar/gguf-dictate/issues"
 
 [project.scripts]
-dictate = "gguf_dictate.dictate:main"
-dictate-tray = "gguf_dictate.tray:main"
+dictate = "gguf_dictate.app:main"
+dictate-tray = "gguf_dictate.app:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "gguf_dictate.__version__" }
@@ -39,7 +39,7 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
-ignore = ["E402", "SIM105", "UP015", "B023", "SIM115"]    # E402: gi.require_version must precede GTK imports
+ignore = ["E402", "SIM105", "UP015", "B023", "SIM115"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

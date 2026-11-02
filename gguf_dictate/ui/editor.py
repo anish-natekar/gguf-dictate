@@ -95,9 +95,9 @@ class Canvas(QWidget):
 
 
 class EditorView(QWidget):
-    def __init__(self, shot, colors, on_done, speak, flag=None, fullscreen=True):
+    def __init__(self, shot, colors, on_done, speak, flag=None, fullscreen=True, on_close=None):
         super().__init__()
-        self.shot, self.on_done, self.speak, self.fullscreen = shot, on_done, speak, fullscreen
+        self.shot, self.on_done, self.speak, self.fullscreen, self.on_close = shot, on_done, speak, fullscreen, on_close
         self.flag = flag or editor_flag()
         self.model = EditorModel(colors)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -159,6 +159,8 @@ class EditorView(QWidget):
         self.releaseKeyboard()
         self.flag.unlink(missing_ok=True)
         super().closeEvent(e)
+        if self.on_close:
+            self.on_close()
 
     def resizeEvent(self, e):
         self.canvas.setGeometry(0, 0, self.width(), self.height())

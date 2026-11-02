@@ -183,3 +183,19 @@ def test_sounddevice_missing_gives_helpful_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "sounddevice", None)
     with pytest.raises(RuntimeError, match="sounddevice"):
         SoundDeviceSource().open(lambda c: None)
+
+
+def test_close_releases_the_audio_source():
+    from gguf_dictate.core.recorder import Recorder
+
+    class Src:
+        closed = False
+
+        def open(self, cb):
+            pass
+
+        def close(self):
+            self.closed = True
+    s = Src()
+    Recorder(s).close()
+    assert s.closed

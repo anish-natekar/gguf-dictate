@@ -29,20 +29,20 @@ Python 3.9+. From source (see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev set
 
 ```bash
 git clone https://github.com/anish-natekar/gguf-dictate.git && cd gguf-dictate
-python3 -m venv --system-site-packages .venv
+python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
 ### Install with pipx (recommended)
 
 ```bash
-sudo apt install xdotool libportaudio2 python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1 pipx
-pipx install --system-site-packages git+https://github.com/anish-natekar/gguf-dictate.git
+sudo apt install xdotool libportaudio2 pipx
+pipx install git+https://github.com/anish-natekar/gguf-dictate.git
 dictate-tray --install-desktop --autostart   # app-menu launcher + start at login
-dictate-tray                                 # or: dictate --model /path/to/model.gguf (no tray)
+dictate-tray                                 # first run opens Settings: pick your .gguf
 ```
 
-`--system-site-packages` lets the tray use the system GTK bindings. Linux/X11 only; Windows and macOS are not supported.
+The UI is Qt (PySide6, installed by pip), so no system GTK packages are needed. Linux/X11 only for now; Windows and macOS are not supported yet.
 
 ## Get a model
 
@@ -56,33 +56,24 @@ Models are not included in this repo.
 ## Run
 
 ```bash
-dictate --model /path/to/model.gguf     # from source: .venv/bin/dictate ...
+dictate-tray                                   # from source: .venv/bin/dictate-tray
+dictate-tray --model /path/to/model.gguf       # set the model from the command line (remembered)
 ```
 
-Wait for `model ready`, click into any text box, then **hold `f9`**, talk, and release.
-On later runs you can omit `--model` (the path is saved in `~/.config/dictate/config.json`).
+One process: a tray icon, the waveform pill, the snip editor and dictation. The first run opens **Settings**; pick a `.gguf`.
+When the menu says **Ready**, click into any text box, **hold `f9`**, talk, and release.
+Settings are saved in `~/.config/dictate/config.json`.
 
-| Flag | Meaning |
-| --- | --- |
-| `--model PATH` | Path to a `.gguf` model (remembered). |
-| `--hotkey KEYS` | Hold-to-talk keys joined with `+`, e.g. `f9`, `ctrl_r`. Default `f9`. |
-| `--lazy-mic` | Open the microphone only while the key is held (adds ~100 ms; avoids the always-on mic indicator). |
-| `--no-space` | Don't append a space after each phrase. |
+Settings has the model, the hold-to-talk hotkey (e.g. `f9`, `ctrl+shift+space`, `ctrl_r`), the snip and paste-all hotkeys,
+snip colours, "open the mic only while the key is held" (adds ~100 ms, avoids the always-on mic indicator) and "no space after each phrase".
 
 ## Top-bar icon (GNOME)
 
-```bash
-dictate-tray               # from source: .venv/bin/python -m gguf_dictate.tray
-```
+Adds a microphone icon to the top bar (the AppIndicator shell extension must be enabled; it is stock on Ubuntu). The menu has
+Start/Stop, **Model** (choose a `.gguf`, or pick a recent one), **Settings**, **How to use / shortcuts**, and **About**.
 
-Adds a microphone icon to the top bar (uses the system Python's GTK + AppIndicator, stock on Ubuntu; the
-AppIndicator shell extension must be enabled). The menu has Start/Stop, **Model** (choose a `.gguf`, or pick a recent one),
-**Settings** (model path, hotkey, mic and spacing options), **How to use / shortcuts**, and **About**.
-It starts and restarts the dictation process for you.
-
-The tray also shows a click-through, transparent **waveform pill** at the bottom of the screen: bars move with your
-voice while the key is held, then a spinner loops while the model transcribes. It needs
-`sudo apt install python3-gi-cairo`. Without the tray, `dictate` still works (no overlay or snip tool).
+The app also shows a click-through, transparent **waveform pill** at the bottom of the screen: bars move with your
+voice while the key is held, then a spinner loops while the model transcribes.
 
 ## Snip + annotate + voice notes (for bug reports to chatbots)
 

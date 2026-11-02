@@ -129,3 +129,9 @@ def test_dialog_rejects_missing_model(dlg, monkeypatch):
     dlg.model.setText("/nonexistent.gguf")
     dlg.buttons.button(QDialogButtonBox.Save).click()
     assert shown == ["Model file not found"]
+
+
+def test_icon_is_never_empty_even_without_a_theme_icon(tray):
+    for state in ("stopped", "loading", "running"):
+        tray.set_state(state)
+        assert not tray.icon.icon().isNull()
