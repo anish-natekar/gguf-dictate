@@ -40,6 +40,9 @@ def format_notes(n, notes):
     return f"Screenshot {n}\n\n" + "\n\n".join(out) if out else ""
 
 
+IMG_MS, TXT_MS = 900, 250     # wait after pasting an image / text before the next step
+
+
 class Queue:
     def __init__(self):
         QUEUE_DIR.mkdir(parents=True, exist_ok=True)
@@ -422,12 +425,21 @@ class Editor:
             cr.rectangle(3, 3, W - 6, H - 6)
             cr.stroke()
             self.badge(cr, 6, 6, "Full screen")
+        n = getattr(self, "queued", 0)
+        self.badge(cr, W - 150, 6, f"Queue: {n} saved" if n else "Queue: empty")
 
 
 class Snip:
     def __init__(self, on_change, speak):
         self.queue, self.on_change, self.speak, self.editor, self.pasting = Queue(), on_change, speak, None, False
+        self.latest_text, self.latest_img, self.own_clip = None, None, False   # latest snip: Ctrl+V pastes it
+        self.cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        self.cb.connect("owner-change", self.clip_changed)
         FLAG.unlink(missing_ok=True)
+
+    def clip_changed(self, *_):
+        if not self.own_clip:       # user copied something else: stop following Ctrl+V
+            self.latest_text = self.latest_img = None
 
     def count(self):
         return len(self.queue.items())
@@ -442,11 +454,38 @@ class Snip:
         pix = Gdk.pixbuf_get_from_window(root, g.x, g.y, g.width, g.height)
         cols = [c for c in (colors or DEFAULT_COLORS) if len(c) == 2][:9] or DEFAULT_COLORS
         self.editor = Editor(pix, cols, self.finished, self.speak)
+        self.editor.queued = self.count()
         self.editor.win.connect("destroy", lambda *_: setattr(self, "editor", None))
 
     def finished(self, surface, notes):
         self.queue.add(surface, notes)
         self.on_change()
+        n = self.count()
+        self.latest_img = GdkPixbuf.Pixbuf.new_from_file(str(self.queue.items()[-1][0]))
+        self.latest_text = format_notes(1, notes) if notes else None
+        self.set_clip(lambda: self.cb.set_image(self.latest_img))
+        subprocess.Popen(["notify-send", "-i", "camera-photo", "-t", "3500", "Snip saved",
+                          f"{n} in queue. Ctrl+V pastes this one" + (" + its notes" if notes else "")
+                          + "; Ctrl+Alt+V pastes all."])
+
+    def set_clip(self, fn):
+        self.own_clip = True
+        fn()
+        GLib.timeout_add(300, lambda: setattr(self, "own_clip", False) or False)
+
+    def ctrl_v(self):
+        """Ctrl+V was pressed: the app pastes the image natively, then we follow with the snip's notes."""
+        if self.pasting or self.editor or not self.latest_text:
+            return
+        text, img = self.latest_text, self.latest_img
+        self.latest_text = None      # one follow-up per snip
+
+        def send_text():
+            self.set_clip(lambda: self.cb.set_text(text, -1))
+            GLib.timeout_add(150, lambda: subprocess.Popen(["xdotool", "key", "--clearmodifiers", "ctrl+v"]) and False)
+            GLib.timeout_add(700, lambda: self.set_clip(lambda: self.cb.set_image(img)) or False)   # restore the image
+            return False
+        GLib.timeout_add(IMG_MS, send_text)
 
     def note(self, text):
         if self.editor:
@@ -486,5 +525,5 @@ class Snip:
 
     def press(self, steps):
         subprocess.Popen(["xdotool", "key", "--clearmodifiers", "ctrl+v"])
-        GLib.timeout_add(1500 if steps[0][0] == "img" else 600, self.run, steps[1:])   # images need time to upload
+        GLib.timeout_add(IMG_MS if steps[0][0] == "img" else TXT_MS, self.run, steps[1:])   # images need time to upload
         return False

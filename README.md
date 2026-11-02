@@ -102,6 +102,9 @@ Press **`ctrl+alt+s`** (or tray menu -> Take snip). The screen freezes and a too
 The capture area is outlined in blue with a size badge (`900 x 450`). With no box, a blue frame and a
 "Full screen" badge mark the whole screen. `Esc` closes the editor even if it lost keyboard focus.
 
+Saving a snip also puts it on the clipboard: **`Ctrl+V`** pastes the latest snip's image, then its notes follow automatically.
+The editor shows a `Queue: N saved` badge and a desktop toast confirms each save.
+
 Saved snips go into a queue (`~/.local/share/dictate/queue`). Click into a chatbot box and press **`ctrl+alt+v`**:
 every queued image is pasted in order, each followed by its notes (`## Red` / `- note`), then the queue is cleared.
 The paste fires when you release the keys, so hold-and-release the combo once.

@@ -82,7 +82,7 @@ class Overlay:
         return True
 
     def handle(self, msg):
-        if msg in ("snip", "paste", "cancel") or msg.startswith("note "):
+        if msg in ("snip", "paste", "cancel", "ctrlv") or msg.startswith("note "):
             if self.extra:
                 self.extra(msg)
             return

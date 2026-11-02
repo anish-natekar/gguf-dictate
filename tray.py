@@ -170,6 +170,8 @@ class Tray:
                 self.snip.editor.cancel()
         elif msg == "paste":
             self.snip.paste_all()
+        elif msg == "ctrlv":
+            self.snip.ctrl_v()
         elif msg.startswith("note "):
             self.snip.note(msg[5:])
 

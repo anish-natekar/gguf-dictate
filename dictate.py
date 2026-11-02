@@ -200,6 +200,8 @@ def main():
         down.add(key_name(key))
         if key == keyboard.Key.esc and EDITOR_FLAG.exists():
             notify("cancel")   # Esc closes the snip editor even if it never got keyboard focus
+        if key_name(key) == "v" and held({"ctrl"}, down) and "alt" not in down and "alt_l" not in down and "alt_r" not in down and "alt_gr" not in down:
+            notify("ctrlv")    # the tray follows a snip's image paste with its notes
         if held(combo, down):
             begin("key")
         for name, c in (("snip", snip_combo), ("paste", paste_combo)):
