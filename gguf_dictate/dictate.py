@@ -17,10 +17,9 @@ import numpy as np
 import transcribe_cpp
 from pynput import keyboard
 
-from . import hotkeys, ipc
+from . import ipc
 from .config import editor_flag, load_config, save_config
-
-RATE = 16000
+from .core.state import RATE, DictationState, HotkeyRouter, prepare_audio, route_text
 
 
 def notify(msg):
@@ -105,56 +104,30 @@ def main():
     session.run(np.zeros(RATE, np.float32))  # warm up: first GPU run compiles shaders
     print(f"{Path(model_path).name} ready in {time.time() - t:.1f}s | hold [{args.hotkey}] to talk | Ctrl+C to quit", flush=True)
 
-    combo, snip_combo, paste_combo = (hotkeys.parse(h) for h in (args.hotkey, args.snip_hotkey, args.paste_hotkey))
-    fired, flag, held = set(), editor_flag(), hotkeys.held
-    mic, down, busy = Mic(args.lazy_mic), set(), threading.Lock()
-    state = {"active": False, "source": "key", "pending": 0}
+    flag, busy = editor_flag(), threading.Lock()
 
-    plock = threading.Lock()
-
-    def work(audio):
-        try:
-            transcribe(audio)
-        finally:
-            with plock:     # hide the overlay only when nothing is recording or still queued
-                state["pending"] -= 1
-                if not state["pending"] and not state["active"]:
-                    notify("idle")
-
-    def transcribe(audio):
+    def process(audio):
         with busy:
-            if len(audio) < 0.2 * RATE:
-                print("too short, ignored", flush=True)
+            audio, why = prepare_audio(audio)
+            if audio is None:
+                print(why if why == "too short" else f"mic is {why}: check input device / volume / mute", flush=True)
                 return
-            peak = float(np.abs(audio).max())
-            if peak < 0.005:
-                print(f"mic is silent (peak {peak:.4f}): check input device / volume / mute", flush=True)
-                return
-            if peak < 0.5:  # quiet mic: normalise so the model gets a healthy level
-                audio = audio * (0.7 / peak)
             t0 = time.time()
             text = session.run(audio).text.strip()
             print(f"[{len(audio) / RATE:.1f}s audio -> {(time.time() - t0) * 1000:.0f}ms] {text}", flush=True)
-            if text and flag.exists():   # snip editor is open: this is a voice note, not typing
-                notify("note " + text)
-            elif text:
-                type_text(text if args.no_space else text + " ")
+            routed = route_text(text, flag.exists(), args.no_space)   # editor open: a voice note, not typing
+            if routed and routed[0] == "note":
+                notify("note " + routed[1])
+            elif routed:
+                type_text(routed[1])
 
-    def begin(source):
-        if not state["active"]:
-            state.update(active=True, source=source)
+    def notify_and_log(msg):
+        if msg == "rec":
             print("recording...", flush=True)
-            notify("rec")
-            mic.start()
+        notify(msg)
 
-    def end():
-        if state["active"]:
-            state["active"] = False
-            audio = mic.stop()
-            with plock:
-                state["pending"] += 1
-            notify("busy")
-            threading.Thread(target=work, args=(audio,), daemon=True).start()
+    state = DictationState(Mic(args.lazy_mic), notify_and_log, process)
+    router = HotkeyRouter(args.hotkey, args.snip_hotkey, args.paste_hotkey, state, notify, flag.exists)
 
     ctl = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)   # the snip editor's Speak button talks to us here
     try:
@@ -164,36 +137,11 @@ def main():
 
     def listen():
         while True:
-            begin("button") if ctl.recv(16) == b"start" else end()
+            state.begin("button") if ctl.recv(16) == b"start" else state.end()
 
     threading.Thread(target=listen, daemon=True).start()
 
-    def on_press(key):
-        down.add(key_name(key))
-        if key == keyboard.Key.esc and flag.exists():
-            notify("cancel")   # Esc closes the snip editor even if it never got keyboard focus
-        if hotkeys.is_ctrl_v(key_name(key), down):
-            notify("ctrlv")    # the tray follows a snip's image paste with its notes
-        if held(combo, down):
-            begin("key")
-        for name, c in (("snip", snip_combo), ("paste", paste_combo)):
-            if name not in fired and held(c, down):
-                fired.add(name)
-                if name == "snip":
-                    notify(name)       # paste waits for key release: our synthetic Ctrl+V would clash with the held keys
-
-    def on_release(key):
-        down.discard(key_name(key))
-        for n, c in (("snip", snip_combo), ("paste", paste_combo)):
-            if n in fired and not held(c, down):
-                fired.discard(n)
-                if n == "paste":
-                    time.sleep(0.15)   # let the physical keys fully settle
-                    notify("paste")
-        if state["active"] and state["source"] == "key" and not held(combo, down):
-            end()
-
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    with keyboard.Listener(on_press=lambda k: router.press(key_name(k)), on_release=lambda k: router.release(key_name(k))) as listener:
         try:
             listener.join()
         except KeyboardInterrupt:
