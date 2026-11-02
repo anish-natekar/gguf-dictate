@@ -37,7 +37,7 @@ def format_notes(n, notes):
             seen.append(note["color"])
     for color in seen:
         out.append(f"## {color}\n" + "\n".join(f"- {x['text']}" for x in notes if x["color"] == color))
-    return f"Screenshot {n}\n\n" + "\n\n".join(out) if out else ""
+    return f"\nScreenshot {n}\n\n" + "\n\n".join(out) if out else ""
 
 
 IMG_MS, TXT_MS = 900, 250     # wait after pasting an image / text before the next step
