@@ -34,6 +34,17 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
+### Install with pipx (recommended)
+
+```bash
+sudo apt install xdotool alsa-utils python3-gi python3-gi-cairo gir1.2-ayatanaappindicator3-0.1 pipx
+pipx install --system-site-packages git+https://github.com/anish-natekar/gguf-dictate.git
+dictate-tray --install-desktop --autostart   # app-menu launcher + start at login
+dictate-tray                                 # or: dictate --model /path/to/model.gguf (no tray)
+```
+
+`--system-site-packages` lets the tray use the system GTK bindings. Linux/X11 only; Windows and macOS are not supported.
+
 ## Get a model
 
 Any speech-to-text GGUF supported by transcribe.cpp works. Examples:

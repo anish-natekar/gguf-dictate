@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 *.gguf
+dist/
+build/
+*.egg-info/

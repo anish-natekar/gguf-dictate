@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gguf-dictate"
+version = "0.2.0"
+description = "Local push-to-talk dictation and voice-annotated screenshot snips for Linux/X11, running any speech-to-text GGUF"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["numpy", "pynput", "transcribe-cpp"]
+classifiers = ["Operating System :: POSIX :: Linux", "Environment :: X11 Applications :: GTK"]
+
+[project.urls]
+Homepage = "https://github.com/anish-natekar/gguf-dictate"
+
+[project.scripts]
+dictate = "dictate:main"
+dictate-tray = "tray:main"
+
+[tool.setuptools]
+py-modules = ["dictate", "tray", "overlay", "snip"]

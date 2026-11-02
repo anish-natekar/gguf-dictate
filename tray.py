@@ -10,6 +10,7 @@ import os
 import re
 import signal
 import socket
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +24,8 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-PY, SCRIPT = HERE / ".venv" / "bin" / "python", HERE / "dictate.py"
+_VENV = HERE / ".venv" / "bin" / "python"
+PY = _VENV if _VENV.exists() else Path(sys.executable)   # source checkout uses its .venv; pip/pipx installs use their own interpreter
 CONFIG = Path.home() / ".config" / "dictate" / "config.json"
 LOG = Path("/tmp/dictate.log")
 from overlay import Overlay  # noqa: E402
@@ -175,9 +177,9 @@ class Tray:
     def start(self):
         if self.proc:
             return
-        subprocess.run(["pkill", "-f", r"python[0-9.]* .*dictate\.py"], check=False)  # stray copies would type everything twice
+        subprocess.run(["pkill", "-f", r"python[0-9.]* (-u )?(.*dictate\.py|-m dictate)"], check=False)  # stray copies would type everything twice
         self.log_fh = open(LOG, "w")
-        self.proc = subprocess.Popen([str(PY), "-u", str(SCRIPT)], stdout=self.log_fh, stderr=subprocess.STDOUT)
+        self.proc = subprocess.Popen([str(PY), "-u", "-m", "dictate"], stdout=self.log_fh, stderr=subprocess.STDOUT)
         self.state = "loading"
         self.refresh()
 
@@ -317,7 +319,32 @@ class Tray:
         Gtk.main_quit()
 
 
+DESKTOP = """[Desktop Entry]
+Type=Application
+Name=Dictate
+Comment=Top-bar push-to-talk dictation and snip tool
+Exec={exec}
+Icon=audio-input-microphone
+Terminal=false
+Categories=Utility;AudioVideo;
+"""
+
+
+def install_desktop():
+    """Write an app-menu launcher (and autostart entry with --autostart) pointing at this install."""
+    exe = shutil.which("dictate-tray") or f"{sys.executable} {Path(__file__).resolve()}"
+    targets = [Path.home() / ".local/share/applications/dictate.desktop"]
+    if "--autostart" in sys.argv:
+        targets.append(Path.home() / ".config/autostart/dictate.desktop")
+    for t in targets:
+        t.parent.mkdir(parents=True, exist_ok=True)
+        t.write_text(DESKTOP.format(exec=exe))
+        print("wrote", t)
+
+
 def main():
+    if "--install-desktop" in sys.argv:
+        return install_desktop()
     lock = open("/tmp/dictate-tray.lock", "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
