@@ -85,10 +85,15 @@ Press **`ctrl+alt+s`** (or tray menu -> Take snip). The screen freezes and a too
 | **Speak** / hold the dictate key | Voice note, saved under the selected colour's heading (**General** if none). |
 | **Full screen** (`F`) | Capture the whole screen. |
 | **Undo** (`Ctrl+Z`) | Undoes strokes and box changes, in order. |
-| **Clear pen**, **Save** (`Enter`), **Cancel** (`Esc`) | |
+| **Clear pen**, **Save** (`Ctrl+Enter`), **Cancel** (`Esc`) | |
+| **Arrow keys** | Move along the bottom toolbar. Colours select as you pass them; `Enter` activates the focused button. |
+
+The capture area is outlined in blue with a size badge (`900 x 450`). With no box, a blue frame and a
+"Full screen" badge mark the whole screen. `Esc` closes the editor even if it lost keyboard focus.
 
 Saved snips go into a queue (`~/.local/share/dictate/queue`). Click into a chatbot box and press **`ctrl+alt+v`**:
 every queued image is pasted in order, each followed by its notes (`## Red` / `- note`), then the queue is cleared.
+The paste fires when you release the keys, so hold-and-release the combo once.
 Hotkeys and colours are in Settings.
 
 ## How it works

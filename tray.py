@@ -163,6 +163,9 @@ class Tray:
     def on_command(self, msg):
         if msg == "snip":
             self.snip.start(load_config().get("colors", DEFAULT_COLORS))
+        elif msg == "cancel":
+            if self.snip.editor:
+                self.snip.editor.cancel()
         elif msg == "paste":
             self.snip.paste_all()
         elif msg.startswith("note "):

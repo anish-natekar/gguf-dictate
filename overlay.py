@@ -82,7 +82,7 @@ class Overlay:
         return True
 
     def handle(self, msg):
-        if msg in ("snip", "paste") or msg.startswith("note "):
+        if msg in ("snip", "paste", "cancel") or msg.startswith("note "):
             if self.extra:
                 self.extra(msg)
             return
@@ -91,6 +91,8 @@ class Overlay:
             self.hist.extend([0.0] * BARS)
             self.ref = 0.03
         elif msg.startswith("lvl "):
+            if self.state == "idle":     # levels only stream while recording: self-heal if an idle arrived late
+                self.state = "rec"
             rms = float(msg[4:])
             self.ref = max(self.ref * 0.985, rms, 0.02)
             floor = 0.004                                   # ignore room noise

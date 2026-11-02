@@ -136,13 +136,18 @@ def main():
 
     combo, snip_combo, paste_combo, fired = parse(args.hotkey), parse(args.snip_hotkey), parse(args.paste_hotkey), set()
     mic, down, busy = Mic(args.lazy_mic), set(), threading.Lock()
-    state = {"active": False, "source": "key"}
+    state = {"active": False, "source": "key", "pending": 0}
+
+    plock = threading.Lock()
 
     def work(audio):
         try:
             transcribe(audio)
         finally:
-            notify("idle")
+            with plock:     # hide the overlay only when nothing is recording or still queued
+                state["pending"] -= 1
+                if not state["pending"] and not state["active"]:
+                    notify("idle")
 
     def transcribe(audio):
         with busy:
@@ -173,8 +178,11 @@ def main():
     def end():
         if state["active"]:
             state["active"] = False
+            audio = mic.stop()
+            with plock:
+                state["pending"] += 1
             notify("busy")
-            threading.Thread(target=lambda a=mic.stop(): work(a), daemon=True).start()
+            threading.Thread(target=work, args=(audio,), daemon=True).start()
 
     ctl = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)   # the snip editor's Speak button talks to us here
     try:
@@ -190,16 +198,24 @@ def main():
 
     def on_press(key):
         down.add(key_name(key))
+        if key == keyboard.Key.esc and EDITOR_FLAG.exists():
+            notify("cancel")   # Esc closes the snip editor even if it never got keyboard focus
         if held(combo, down):
             begin("key")
         for name, c in (("snip", snip_combo), ("paste", paste_combo)):
             if name not in fired and held(c, down):
                 fired.add(name)
-                notify(name)
+                if name == "snip":
+                    notify(name)       # paste waits for key release: our synthetic Ctrl+V would clash with the held keys
 
     def on_release(key):
         down.discard(key_name(key))
-        fired.difference_update([n for n, c in (("snip", snip_combo), ("paste", paste_combo)) if not held(c, down)])
+        for n, c in (("snip", snip_combo), ("paste", paste_combo)):
+            if n in fired and not held(c, down):
+                fired.discard(n)
+                if n == "paste":
+                    time.sleep(0.15)   # let the physical keys fully settle
+                    notify("paste")
         if state["active"] and state["source"] == "key" and not held(combo, down):
             end()
 

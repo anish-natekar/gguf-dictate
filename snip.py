@@ -20,7 +20,7 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 QUEUE_DIR = Path.home() / ".local" / "share" / "dictate" / "queue"
 FLAG = Path("/tmp/dictate-editor")      # exists while the editor is open: dictate.py then sends notes here
 DEFAULT_COLORS = [["Red", "#ff3b30"], ["Blue", "#0a84ff"], ["Green", "#30d158"], ["Yellow", "#ffd60a"], ["Purple", "#bf5af2"]]
-KEYS = "0 box   1-5 colour   F full screen   Ctrl+Z undo   hold dictate key or Speak = voice note   Enter save   Esc cancel"
+KEYS = "0 box   1-5 colour   F full screen   Ctrl+Z undo   hold dictate key or Speak = voice note   Ctrl+Enter save   Esc cancel"
 
 
 def rgb(hexv):
@@ -88,7 +88,10 @@ class Editor:
         bar = Gtk.Box(spacing=4)
         bar.get_style_context().add_class("snipbar")
 
-        def button(icon, tip, cb, cls="snipicon", label=None):
+        self.items = []          # (widget, callback, kind) in toolbar order, for arrow-key navigation
+        self.fi = 0
+
+        def button(icon, tip, cb, cls="snipicon", label=None, kind="action"):
             b = Gtk.Button(can_focus=False, tooltip_text=tip)
             if label:
                 b.set_label(label)
@@ -98,23 +101,27 @@ class Editor:
                 b.set_label(tip.split()[0])
             for c in cls.split():
                 b.get_style_context().add_class(c)
+            if "snipsw" in cls:
+                b.set_size_request(26, 26)
+                b.set_valign(Gtk.Align.CENTER)
             b.connect("clicked", lambda _b: cb())
             bar.pack_start(b, False, False, 0)
+            self.items.append((b, cb, kind))
             return b
 
         def sep():
             bar.pack_start(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL, margin=4), False, False, 0)
 
-        self.btns = [button("edit-select-all-symbolic", "Box tool (0): drag to choose the capture area", lambda: self.pick(None), "snipicon snipbox")]
+        self.btns = [button("edit-select-all-symbolic", "Box tool (0): drag to choose the capture area", lambda: self.pick(None), "snipicon snipbox", kind="tool")]
         sep()
         for i, (name, _) in enumerate(colors):
-            self.btns.append(button("", f"{name} pen ({i + 1})", lambda i=i: self.pick(i), f"snipsw snipc{i}", label=" "))
-        self.width = 5
+            self.btns.append(button("", f"{name} pen ({i + 1})", lambda i=i: self.pick(i), f"snipsw snipc{i}", label=" ", kind="tool"))
+        self.width, self.widths = 5, [("Thin", 3), ("Medium", 5), ("Thick", 9)]
         size = Gtk.MenuButton(can_focus=False, tooltip_text="Pen size")
         size.get_style_context().add_class("snipicon")
         pop = Gtk.Popover()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin=6)
-        for label, w in (("Thin", 3), ("Medium", 5), ("Thick", 9)):
+        for label, w in self.widths:
             r = Gtk.ModelButton(text=label)
             r.connect("clicked", lambda _b, w=w: setattr(self, "width", w))
             box.pack_start(r, False, False, 0)
@@ -123,21 +130,22 @@ class Editor:
         size.set_popover(pop)
         size.set_image(Gtk.Image.new_from_icon_name("document-edit-symbolic", Gtk.IconSize.BUTTON))
         bar.pack_start(size, False, False, 0)
+        self.items.append((size, self.cycle_size, "action"))
         sep()
         button("view-fullscreen-symbolic", "Full screen (F)", self.full_screen)
         button("edit-undo-symbolic", "Undo (Ctrl+Z)", self.undo)
         button("edit-clear-all-symbolic", "Clear pen strokes", self.clear)
         self.speak_btn = button("microphone-sensitivity-high-symbolic", "Speak a note (or hold the dictate key)", self.toggle_speak, "snipicon snipspeak")
         sep()
-        button("", "Save (Enter)", self.save, "snipok", label="Save")
+        button("", "Save (Ctrl+Enter)", self.save, "snipok", label="Save")
         button("window-close-symbolic", "Cancel (Esc)", self.cancel)
 
         self.hint = Gtk.Label()
         self.hint.get_style_context().add_class("sniphint")
-        dock = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER, valign=Gtk.Align.END, margin_bottom=56)
+        dock = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER, valign=Gtk.Align.END, margin_bottom=20)
         dock.pack_start(self.hint, False, False, 0)
         dock.pack_start(bar, False, False, 0)
-        self.panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, halign=Gtk.Align.END, valign=Gtk.Align.END, margin_end=18, margin_bottom=56)
+        self.panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, halign=Gtk.Align.END, valign=Gtk.Align.END, margin_end=18, margin_bottom=20)
         self.panel.get_style_context().add_class("snippanel")
         self.panel.set_no_show_all(True)
 
@@ -184,6 +192,8 @@ class Editor:
                ".snipicon { background: none; border: 2px solid transparent; box-shadow: none; border-radius: 16px; padding: 4px 8px; color: white; }\n"
                ".snipicon:hover { background: rgba(255,255,255,.16); }\n.snipicon.sel { border-color: white; }\n"
                ".snipspeak.rec { background: #d32f2f; }\n"
+               ".snipicon.kb, .snipok.kb { background: rgba(255,255,255,.22); box-shadow: 0 0 0 2px white; }\n"
+               ".snipsw.kb { box-shadow: 0 0 0 2px rgba(255,255,255,.6); }\n"
                ".snipok { background-image: none; background: #30d158; color: #111; font-weight: bold; border-radius: 16px; padding: 4px 14px; border: none; }\n"
                ".snipsw { background-image: none; min-width: 22px; min-height: 22px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); }\n"
                ".snipsw.sel { border: 3px solid white; }\n")
@@ -198,11 +208,37 @@ class Editor:
         if i is not None and i >= len(self.colors):
             return
         self.sel = i
+        self.fi = 0 if i is None else i + 1
+        self.mark_focus()
         for j, b in enumerate(self.btns):
             (b.get_style_context().add_class if j == (0 if i is None else i + 1) else b.get_style_context().remove_class)("sel")
         self.hint.set_text("Drag to choose the area, then pick a colour to draw" if i is None else f"Drawing in {self.colors[i][0]}  -  speak to add a note")
         self.refresh_panel()
         self.area.queue_draw()
+
+    def mark_focus(self):
+        for j, (w, _, _) in enumerate(self.items):
+            (w.get_style_context().add_class if j == self.fi else w.get_style_context().remove_class)("kb")
+
+    def move_focus(self, step):
+        self.fi = (self.fi + step) % len(self.items)
+        w, cb, kind = self.items[self.fi]
+        if kind == "tool":
+            cb()                    # arrowing over a colour selects it, no Enter needed
+        else:
+            self.mark_focus()
+            self.hint.set_text(w.get_tooltip_text() + "  -  Enter to use")
+
+    def activate_focus(self):
+        w, cb, kind = self.items[self.fi]
+        if kind == "action":
+            cb()
+
+    def cycle_size(self):
+        names = [n for n, _ in self.widths]
+        n, w = self.widths[(names.index(dict((v, k) for k, v in self.widths)[self.width]) + 1) % len(names)]
+        self.width = w
+        self.hint.set_text(f"Pen size: {n}")
 
     def note_slot(self):
         return len(self.colors) if self.sel is None else self.sel
@@ -284,8 +320,10 @@ class Editor:
         key = Gdk.keyval_name(ev.keyval)
         if key == "Escape":
             self.cancel()
+        elif key in ("Left", "Right"):
+            self.move_focus(-1 if key == "Left" else 1)
         elif key in ("Return", "KP_Enter"):
-            self.save()
+            self.save() if ev.state & Gdk.ModifierType.CONTROL_MASK else self.activate_focus()
         elif key in ("z", "Z") and ev.state & Gdk.ModifierType.CONTROL_MASK:
             self.undo()
         elif key in ("b", "B", "0"):
@@ -344,6 +382,19 @@ class Editor:
                 cr.line_to(*p)
             cr.stroke()
 
+    BLUE = (0.04, 0.52, 1.0)
+
+    def badge(self, cr, x, y, text):
+        cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        cr.set_font_size(13)
+        w = cr.text_extents(text).width + 16
+        cr.set_source_rgb(*self.BLUE)
+        cr.rectangle(x, y, w, 24)
+        cr.fill()
+        cr.set_source_rgb(1, 1, 1)
+        cr.move_to(x + 8, y + 17)
+        cr.show_text(text)
+
     def draw(self, widget, cr):
         W, H = widget.get_allocated_width(), widget.get_allocated_height()
         Gdk.cairo_set_source_pixbuf(cr, self.pix, 0, 0)
@@ -354,17 +405,23 @@ class Editor:
             for r in ((0, 0, W, y), (0, y + h, W, H - y - h), (0, y, x, h), (x + w, y, W - x - w, h)):
                 cr.rectangle(*r)
             cr.fill()
-            cr.set_source_rgba(1, 1, 1, 0.9)
-            cr.set_line_width(1)
-            cr.rectangle(x + .5, y + .5, w, h)
-            cr.stroke()
             cr.save()
             cr.rectangle(x, y, w, h)
             cr.clip()
             self.paint_strokes(cr)
             cr.restore()
+            cr.set_source_rgb(*self.BLUE)           # blue capture-box boundary
+            cr.set_line_width(2)
+            cr.rectangle(x - 1, y - 1, w + 2, h + 2)
+            cr.stroke()
+            self.badge(cr, x - 1, max(0, y - 25), f"{w} x {h}")
         else:
             self.paint_strokes(cr)
+            cr.set_source_rgb(*self.BLUE)           # no box: the whole screen is captured, so frame it
+            cr.set_line_width(6)
+            cr.rectangle(3, 3, W - 6, H - 6)
+            cr.stroke()
+            self.badge(cr, 6, 6, "Full screen")
 
 
 class Snip:
