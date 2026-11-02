@@ -71,3 +71,20 @@ def test_queue_clear_is_idempotent_and_keeps_directory(tmp_path):
     q.clear()
     q.clear()
     assert tmp_path.is_dir() and q.items() == []
+
+
+def test_queue_keeps_order_and_every_item_even_with_a_coarse_clock(tmp_path, monkeypatch):
+    """Windows' clock ticks every ~15 ms: identical timestamps must not overwrite or reorder snips."""
+    monkeypatch.setattr("gguf_dictate.notes.time.time_ns", lambda: 1_000_000)
+    q = Queue(tmp_path)
+    for i in range(5):
+        q.add(FakeSurface(), [{"color": "Red", "text": str(i)}])
+    assert [n[0]["text"] for _, n in q.items()] == ["0", "1", "2", "3", "4"]
+    assert len(list(tmp_path.glob("*.png"))) == 5
+
+
+def test_a_new_queue_object_continues_after_existing_snips(tmp_path, monkeypatch):
+    monkeypatch.setattr("gguf_dictate.notes.time.time_ns", lambda: 5)
+    Queue(tmp_path).add(FakeSurface(), [{"color": "Red", "text": "old"}])
+    Queue(tmp_path).add(FakeSurface(), [{"color": "Red", "text": "new"}])
+    assert [n[0]["text"] for _, n in Queue(tmp_path).items()] == ["old", "new"]

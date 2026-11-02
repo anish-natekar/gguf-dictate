@@ -1,8 +1,14 @@
 """Config behaviour the Qt port must preserve (the port moves paths to platformdirs but not these contracts)."""
 import json
+import os
 import stat
 
+import pytest
+
 from gguf_dictate import config
+
+posix_only = pytest.mark.skipif(os.name == "nt", reason="XDG locations are Linux-only")
+
 
 
 def test_save_overwrites_existing_and_preserves_unicode(tmp_path):
@@ -19,6 +25,7 @@ def test_load_empty_file_is_empty_dict(tmp_path):
     assert config.load_config(p) == {}
 
 
+@posix_only
 def test_runtime_dir_falls_back_to_private_tmp_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(config.os, "getuid", lambda: 424242)
@@ -27,6 +34,7 @@ def test_runtime_dir_falls_back_to_private_tmp_dir(tmp_path, monkeypatch):
     assert d.name == "fallback" and stat.S_IMODE(d.stat().st_mode) == 0o700
 
 
+@posix_only
 def test_runtime_files_share_one_directory(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     assert {config.log_path().parent, config.lock_path().parent} == {tmp_path / "dictate"}

@@ -1,6 +1,12 @@
+import os
 import stat
 
+import pytest
+
 from gguf_dictate import config
+
+posix_only = pytest.mark.skipif(os.name == "nt", reason="XDG locations are Linux-only")
+
 
 
 def test_load_missing_or_corrupt_returns_empty(tmp_path):
@@ -17,6 +23,7 @@ def test_save_roundtrip_is_atomic(tmp_path):
     assert [f.name for f in p.parent.iterdir()] == ["config.json"]   # no leftover temp file
 
 
+@posix_only
 def test_runtime_dir_is_private(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     d = config.runtime_dir()

@@ -1,4 +1,4 @@
-"""Snip queue on disk and the text format for notes (pure logic, no GTK)."""
+"""Snip queue on disk and the text format for notes (pure logic, no GUI)."""
 import json
 import time
 
@@ -22,6 +22,7 @@ class Queue:
     def __init__(self, directory=None):
         self.dir = directory or queue_dir()
         self.dir.mkdir(parents=True, exist_ok=True)
+        self.last = 0
 
     def items(self):
         out = []
@@ -33,8 +34,9 @@ class Queue:
         return out
 
     def add(self, surface, notes):
-        """surface: anything with write_to_png(path) (a cairo.ImageSurface)."""
-        base = self.dir / str(time.time_ns())
+        """surface: anything with write_to_png(path) (a QImage wrapper)."""
+        self.last = max(time.time_ns(), self.last + 1, *(int(p.stem) + 1 for p in self.dir.glob("*.png") if p.stem.isdigit()))
+        base = self.dir / f"{self.last:020d}"      # strictly increasing and fixed width: sorts oldest first even on a coarse clock
         base.with_suffix(".json").write_text(json.dumps(notes))
         surface.write_to_png(str(base.with_suffix(".png")))      # the png appears last, so items() never sees a half snip
 

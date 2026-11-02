@@ -1,21 +1,30 @@
 """Per-user paths (platformdirs) and the single-instance lock."""
+import os
 from pathlib import Path
+
+import pytest
 
 from gguf_dictate import config
 from gguf_dictate.core.lock import SingleInstance
 from gguf_dictate.notes import Queue
 
+posix_only = pytest.mark.skipif(os.name == "nt", reason="XDG locations are Linux-only")
 
+
+
+@posix_only
 def test_config_file_follows_xdg_config_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert config.config_file() == tmp_path / "dictate" / "config.json"
 
 
+@posix_only
 def test_queue_dir_follows_xdg_data_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     assert config.queue_dir() == tmp_path / "dictate" / "queue"
 
 
+@posix_only
 def test_defaults_match_the_locations_existing_installs_use(tmp_path, monkeypatch):
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
@@ -24,6 +33,7 @@ def test_defaults_match_the_locations_existing_installs_use(tmp_path, monkeypatc
     assert config.queue_dir() == tmp_path / ".local" / "share" / "dictate" / "queue"
 
 
+@posix_only
 def test_save_and_load_default_to_config_file_at_call_time(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     config.save_config({"model": "m.gguf"})
@@ -31,6 +41,7 @@ def test_save_and_load_default_to_config_file_at_call_time(tmp_path, monkeypatch
     assert config.load_config() == {"model": "m.gguf"}
 
 
+@posix_only
 def test_queue_default_directory_is_resolved_at_call_time(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     assert Queue().dir == tmp_path / "dictate" / "queue" and Queue().dir.is_dir()
