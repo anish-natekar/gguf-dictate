@@ -15,7 +15,7 @@ def test_gui_modules_import():
     from gguf_dictate import overlay, snip
 
     assert callable(overlay.aurora)
-    assert snip.IMG_MS > 0 and hasattr(snip, "Snip")
+    assert hasattr(snip, "Snip") and snip.Pasting.__name__ == "Pasting"
 
 
 def test_aurora_colors_are_valid_rgb():

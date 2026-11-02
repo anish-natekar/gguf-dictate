@@ -7,7 +7,6 @@ Local STT via transcribe.cpp on any GGUF (Parakeet / Whisper / ...). X11 only.
 """
 import argparse
 import socket
-import subprocess
 import sys
 import threading
 import time
@@ -22,6 +21,7 @@ from .config import editor_flag, load_config, save_config
 from .core.recorder import Recorder
 from .core.state import RATE, DictationState, HotkeyRouter, prepare_audio, route_text
 from .platform.audio import SoundDeviceSource
+from .platform.linux import XdotoolKeys
 
 
 def notify(msg):
@@ -31,10 +31,6 @@ def notify(msg):
 
 def key_name(key):
     return key.char.lower() if isinstance(key, keyboard.KeyCode) and key.char else getattr(key, "name", str(key))
-
-
-def type_text(text):
-    subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "1", "--", text], check=False)
 
 
 def main():
@@ -60,7 +56,7 @@ def main():
     session.run(np.zeros(RATE, np.float32))  # warm up: first GPU run compiles shaders
     print(f"{Path(model_path).name} ready in {time.time() - t:.1f}s | hold [{args.hotkey}] to talk | Ctrl+C to quit", flush=True)
 
-    flag, busy = editor_flag(), threading.Lock()
+    flag, busy, keys = editor_flag(), threading.Lock(), XdotoolKeys()
 
     def process(audio):
         with busy:
@@ -75,16 +71,18 @@ def main():
             if routed and routed[0] == "note":
                 notify("note " + routed[1])
             elif routed:
-                type_text(routed[1])
+                keys.type_text(routed[1])
 
     def notify_and_log(msg):
         if msg == "rec":
             print("recording...", flush=True)
+        elif msg == "cancel":
+            print("Esc: closing the snip editor", flush=True)
         notify(msg)
 
     mic = Recorder(SoundDeviceSource(), on_level=lambda lvl: notify(f"lvl {lvl:.5f}"), lazy=args.lazy_mic)
     state = DictationState(mic, notify_and_log, process)
-    router = HotkeyRouter(args.hotkey, args.snip_hotkey, args.paste_hotkey, state, notify, flag.exists)
+    router = HotkeyRouter(args.hotkey, args.snip_hotkey, args.paste_hotkey, state, notify_and_log, flag.exists)
 
     ctl = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)   # the snip editor's Speak button talks to us here
     try:
