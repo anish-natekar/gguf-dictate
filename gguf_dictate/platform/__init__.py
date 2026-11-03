@@ -3,7 +3,7 @@ import sys
 
 from .linux import NotifySend, PipeWireMonitorSource, XdotoolKeys
 
-__all__ = ["PynputKeys", "QtNotifier", "UnsupportedSystemAudio", "default_keys", "default_notifier", "default_system_source"]
+__all__ = ["PynputKeys", "QtNotifier", "UnsupportedSystemAudio", "default_keys", "default_notifier", "default_system_source", "session_warning"]
 
 
 class PynputKeys:
@@ -55,3 +55,14 @@ def default_keys(platform=None):
 
 def default_notifier(platform=None, icon=None):
     return NotifySend() if (platform or sys.platform).startswith("linux") else QtNotifier(icon)
+
+
+def session_warning(platform=None, env=None):
+    """Why global hotkeys cannot work in this session, or None. Wayland blocks the global key listener and xdotool."""
+    import os
+    if not (platform or sys.platform).startswith("linux"):
+        return None
+    env = os.environ if env is None else env
+    if env.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        return "Wayland session: hotkeys and pasting need X11. Log out and pick 'Ubuntu on Xorg'."
+    return None

@@ -63,3 +63,11 @@ def test_other_platforms_use_pynput_and_qt(osname, monkeypatch):
     monkeypatch.setattr(p, "PynputKeys", lambda *a, **k: "keys")
     assert default_keys(osname) == "keys"
     assert isinstance(default_notifier(osname, icon=object()), QtNotifier)
+
+
+def test_session_warning_only_on_wayland_linux():
+    from gguf_dictate.platform import session_warning
+    assert "X11" in session_warning("linux", {"XDG_SESSION_TYPE": "wayland"})
+    assert session_warning("linux", {"XDG_SESSION_TYPE": "x11"}) is None
+    assert session_warning("linux", {}) is None
+    assert session_warning("win32", {"XDG_SESSION_TYPE": "wayland"}) is None
