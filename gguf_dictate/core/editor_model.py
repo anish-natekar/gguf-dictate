@@ -4,7 +4,8 @@ WIDTHS = [("Thin", 3), ("Medium", 5), ("Thick", 9)]
 MIN_BOX = 8     # a smaller drag is a click, not a new box
 GENERAL = ("General", "#cccccc")
 ACTIONS = [("Pen size", "size"), ("Full screen (F)", "full"), ("Undo (Ctrl+Z)", "undo"), ("Clear pen strokes", "clear"),
-           ("Speak a note (or hold the dictate key)", "speak"), ("Save (Ctrl+Enter)", "save"), ("Cancel (Esc)", "cancel")]
+           ("Speak a note (or hold the dictate key)", "speak"), ("Undo last note (Backspace)", "unnote"),
+           ("Save (Ctrl+Enter)", "save"), ("Cancel (Esc)", "cancel")]
 HINT_BOX = "Drag to choose the area, then pick a colour to draw"
 
 
@@ -16,6 +17,7 @@ class EditorModel:
         self.rect, self.drag, self.before, self.cur = None, None, None, None
         self.strokes, self.history, self.sel, self.talking = [], [], None, False
         self.notes = [[] for _ in range(len(self.colors) + 1)]        # last list = "General" (no colour selected)
+        self.note_order = []      # slot of each note, oldest first, so undo removes the latest note whatever colour it is in
         self.width, self.focus, self.hint = 5, 0, HINT_BOX
         self.items = [("Box tool (0): drag to choose the capture area", "tool", None)]
         self.items += [(f"{name} pen ({i + 1})", "tool", None) for i, (name, _) in enumerate(self.colors)]
@@ -33,12 +35,16 @@ class EditorModel:
         return len(self.colors) if self.sel is None else self.sel
 
     def add_note(self, text):
-        self.notes[self.note_slot()].append(text)
+        slot = self.note_slot()
+        self.notes[slot].append(text)
+        self.note_order.append(slot)
         self.talking = False
 
     def remove_last_note(self):
-        slot = self.notes[self.note_slot()]
-        return slot.pop() if slot else None
+        """Take back the most recent note, in whichever colour it was spoken; None when there are none."""
+        if not self.note_order:
+            return None
+        return self.notes[self.note_order.pop()].pop()
 
     def notes_for_save(self):
         names = [n for n, _ in self.colors] + [GENERAL[0]]

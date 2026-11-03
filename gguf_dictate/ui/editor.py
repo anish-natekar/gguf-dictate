@@ -23,7 +23,7 @@ QPushButton#swatch:checked { border: 3px solid white; }
 QPushButton#save { background: #30d158; color: #111; font-weight: bold; padding: 4px 14px; }
 QPushButton#speak[rec="true"] { background: #d32f2f; }
 """
-LABELS = {"size": "Size", "full": "Full", "undo": "Undo", "clear": "Clear", "speak": "Speak", "save": "Save", "cancel": "Cancel"}
+LABELS = {"size": "Size", "full": "Full", "undo": "Undo", "clear": "Clear", "speak": "Speak", "unnote": "Undo note", "save": "Save", "cancel": "Cancel"}
 
 
 class QImageSurface:
@@ -227,7 +227,7 @@ class EditorView(QWidget):
 
     def run(self, action):
         getattr(self, {"size": "cycle_size", "full": "full_screen", "undo": "undo", "clear": "clear",
-                       "speak": "toggle_speak", "save": "save", "cancel": "cancel"}[action])()
+                       "speak": "toggle_speak", "unnote": "undo_note", "save": "save", "cancel": "cancel"}[action])()
 
     def cycle_size(self):
         self.model.cycle_size()
@@ -247,6 +247,10 @@ class EditorView(QWidget):
 
     def add_note(self, text):
         self.model.add_note(text)
+        self.sync()
+
+    def undo_note(self):
+        self.model.remove_last_note()
         self.sync()
 
     def set_talking(self, on):
@@ -324,7 +328,6 @@ class EditorView(QWidget):
         elif Qt.Key_1 <= k <= Qt.Key_9:
             self.pick(k - Qt.Key_1)
         elif k == Qt.Key_Backspace:
-            self.model.remove_last_note()
-            self.sync()
+            self.undo_note()
         else:
             super().keyPressEvent(e)

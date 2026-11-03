@@ -50,17 +50,19 @@ def test_notes_for_save_orders_by_colour_slot_then_general():
     assert [(n["color"], n["text"]) for n in m.notes_for_save()] == [("Red", "r1"), ("Red", "r2"), ("Green", "g"), ("General", "gen")]
 
 
-def test_remove_last_note_only_affects_current_slot():
+def test_remove_last_note_takes_back_the_latest_note_in_any_colour():
     m = model()
     m.pick(0)
     m.add_note("a")
     m.pick(1)
     m.add_note("b")
-    m.add_note("c")
-    assert m.remove_last_note() == "c"
-    assert [n["text"] for n in m.notes_for_save()] == ["a", "b"]
     m.pick(2)
-    assert m.remove_last_note() is None
+    m.add_note("c")
+    m.pick(0)      # the current colour is not the one the latest note is in
+    assert m.remove_last_note() == "c"
+    assert m.remove_last_note() == "b"
+    assert [n["text"] for n in m.notes_for_save()] == ["a"]
+    assert m.remove_last_note() == "a" and m.remove_last_note() is None
 
 
 def test_panel_rows_show_only_colours_with_notes_and_current_target():
@@ -200,8 +202,8 @@ def test_cycle_pen_size_thin_medium_thick():
 def test_toolbar_items_order_and_kinds():
     m = model()
     kinds = [k for _, k, _ in m.items]
-    assert kinds == ["tool"] * 4 + ["action"] * 7
-    assert [a for _, _, a in m.items][4:] == ["size", "full", "undo", "clear", "speak", "save", "cancel"]
+    assert kinds == ["tool"] * 4 + ["action"] * 8
+    assert [a for _, _, a in m.items][4:] == ["size", "full", "undo", "clear", "speak", "unnote", "save", "cancel"]
 
 
 def test_arrowing_over_colours_selects_them_and_actions_show_hint():

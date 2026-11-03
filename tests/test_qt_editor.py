@@ -37,7 +37,7 @@ def drag(view, a, b):
 
 
 def test_toolbar_has_a_button_per_model_item(env):
-    assert len(env.buttons) == len(env.model.items) == 11
+    assert len(env.buttons) == len(env.model.items) == 12
 
 
 def test_number_keys_pick_colours_and_0_returns_to_box_tool(env, qtbot):
@@ -182,3 +182,14 @@ def test_notes_panel_grows_to_show_every_colours_notes(env, qtbot):
     shown = [w for w in view.panel.findChildren(QLabel) if not w.isHidden()]
     assert len(shown) == 6      # title, two headings, three notes
     assert all(view.panel.rect().contains(w.geometry()) for w in shown)      # nothing clipped by a stale panel size
+
+
+def test_undo_note_button_removes_the_latest_note(env, qtbot):
+    env.pick(0)
+    env.add_note("red")
+    env.pick(1)
+    env.add_note("blue")
+    button = next(b for b in env.buttons if b.text() == "Undo note")
+    qtbot.mouseClick(button, Qt.LeftButton)
+    assert [n["text"] for n in env.model.notes_for_save()] == ["red"]
+    assert "blue" not in env.panel_text() and "red" in env.panel_text()
