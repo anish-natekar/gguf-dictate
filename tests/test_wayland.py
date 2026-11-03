@@ -141,3 +141,27 @@ def test_prefer_xwayland_only_on_wayland_and_never_overrides():
                       ({"XDG_SESSION_TYPE": "wayland", "QT_QPA_PLATFORM": "wayland"}, "wayland")):
         prefer_xwayland(env)
         assert env.get("QT_QPA_PLATFORM") == want
+
+
+def test_portal_paths_and_uris():
+    from gguf_dictate.platform.portal import ScreenshotError, request_path, uri_to_path
+    assert request_path(":1.42", "tok") == "/org/freedesktop/portal/desktop/request/1_42/tok"
+    assert uri_to_path("file:///home/me/Pictures/Screen%20shot.png") == "/home/me/Pictures/Screen shot.png"
+    with pytest.raises(ScreenshotError):
+        uri_to_path("https://example.com/x.png")
+
+
+def test_read_and_remove_deletes_the_file(tmp_path):
+    from gguf_dictate.platform.portal import read_and_remove
+    f = tmp_path / "s.png"
+    f.write_bytes(b"png")
+    assert read_and_remove(str(f)) == b"png" and not f.exists()
+
+
+def test_crop_rect_picks_the_monitor_out_of_the_desktop_image():
+    from PySide6.QtCore import QRect
+
+    from gguf_dictate.ui.snip import crop_rect
+    desktop = QRect(0, 0, 3840, 1080)
+    assert crop_rect(desktop, QRect(1920, 0, 1920, 1080), 3840) == QRect(1920, 0, 1920, 1080)
+    assert crop_rect(desktop, QRect(1920, 0, 1920, 1080), 7680) == QRect(3840, 0, 3840, 2160)      # image at 2x

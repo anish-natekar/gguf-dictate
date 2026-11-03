@@ -125,3 +125,18 @@ def test_ctrl_v_and_paste_all_delegate(snip):
     snip.ctrl_v()
     snip.paste_all()
     assert snip.pasting.log == ["ctrl_v", "paste_all"]
+
+
+def test_failed_or_empty_grab_toasts_and_opens_nothing(qtbot):
+    toasts = []
+
+    class Notifier:
+        def toast(self, title, body):
+            toasts.append((title, body))
+
+    for grab in (lambda: (_ for _ in ()).throw(RuntimeError("denied")), lambda: QPixmap()):
+        snip = SnipController(on_change=lambda: None, speak=lambda c: None, grab=grab, editor_factory=FakeEditor, notifier=Notifier(),
+                              pasting=type("P", (), {"pasting": False})())
+        snip.start(None)
+        assert snip.editor is None
+    assert [t[0] for t in toasts] == ["Snip failed", "Snip failed"]

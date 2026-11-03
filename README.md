@@ -17,16 +17,17 @@ several colours, add a voice note per colour, queue several snips and paste them
 - **Private**: everything runs on your machine; no network access after install.
 - **Hackable**: pure Python (Qt UI), logic separated from the GUI and covered by tests.
 
-Not supported: Wayland, macOS, streaming/partial results, live meeting transcription, text post-processing.
+Not supported: macOS, other Wayland desktops than GNOME, streaming/partial results, live meeting transcription, text post-processing.
 
 ## Support
 
 | | Linux (X11) | Windows 10/11 | macOS | Linux (Wayland) |
 | --- | --- | --- | --- | --- |
-| Status | **Supported, tested** | Implemented, **untested** | Not supported | Not supported |
-| Tested on | Ubuntu 24.04 GNOME X11, NVIDIA RTX 3050 + AMD iGPU via Vulkan, Python 3.12 | CI runs the unit tests only; never run by hand | | |
-| Dictation typing | `xdotool` | `pynput` | | `xdotool`/`pynput` can't inject into Wayland apps |
-| Hotkeys | `pynput` | `pynput` | | |
+| Status | **Supported, tested** | Implemented, **untested** | Not supported | **GNOME supported, tested** |
+| Tested on | Ubuntu 24.04 GNOME X11, NVIDIA RTX 3050 + AMD iGPU via Vulkan, Python 3.12 | CI runs the unit tests only; never run by hand | | Ubuntu 24.04 GNOME (Wayland session) |
+| Dictation typing | `xdotool` | `pynput` | | `wl-copy` + Ctrl+V sent through mutter RemoteDesktop |
+| Hotkeys | `pynput` | `pynput` | | evdev (`input` group) |
+| Snip capture | Qt screen grab | Qt screen grab | | xdg-desktop-portal Screenshot |
 | Microphone | PortAudio (`libportaudio2`) | PortAudio (bundled in the `sounddevice` wheel) | | |
 | Tray | GNOME needs the AppIndicator extension (stock on Ubuntu) | system tray | | |
 | GPU | Vulkan (works), CPU fallback | unverified: check the `transcribe-cpp` log line for the backend | | |
@@ -43,7 +44,7 @@ Windows testers are very welcome: please open an issue with what worked and what
 
 Needs Python 3.9 or newer. The UI is Qt (PySide6), installed by pip; no GTK or system UI packages are needed.
 
-### Linux (Ubuntu / Debian, X11)
+### Linux (Ubuntu / Debian, X11 or GNOME Wayland)
 
 ```bash
 sudo apt install xdotool libportaudio2 pipx
@@ -52,7 +53,17 @@ dictate-tray --install-desktop --autostart    # optional: app-menu launcher + st
 dictate-tray                                  # first run opens Settings: pick your .gguf
 ```
 
-Log in to an **X11** session (on Ubuntu pick "Ubuntu on Xorg" at the login screen). On GNOME the tray icon needs the
+The session type (X11 or Wayland) is detected automatically. On **GNOME Wayland** also install `wl-clipboard` (`sudo apt install wl-clipboard`)
+and add yourself to the `input` group so hotkeys work, then log in again:
+
+```bash
+sudo usermod -aG input $USER
+```
+
+The `input` group lets any program you run read raw keyboard events, which is how every Wayland dictation tool gets global hotkeys
+(GNOME has no global-shortcut API yet). Without it dictate says so and does not start. On Wayland the UI runs through XWayland so the
+overlay and meeting pill can position themselves. The first screenshot may ask for permission. Other Wayland desktops (KDE, Sway) are untested.
+On GNOME the tray icon needs the
 AppIndicator extension (`gnome-shell-extension-appindicator`, enabled by default on Ubuntu). Other distros: install `xdotool`,
 PortAudio and `notify-send` (libnotify) with your package manager.
 
@@ -163,12 +174,12 @@ meeting starts; switching output devices mid-meeting ends that track. **Tell peo
 1. PortAudio (`sounddevice`) streams 16 kHz mono audio; a rolling 0.25 s buffer keeps the first syllable from being clipped.
 2. [`pynput`](https://pypi.org/project/pynput/) watches for the hotkey (it observes keys, it does not grab them).
 3. On release, the audio goes to transcribe.cpp (`transcribe-cpp` on PyPI, bundled CPU + Vulkan).
-4. The result is typed into the focused window (`xdotool` on Linux, `pynput` elsewhere).
+4. The result is typed into the focused window (`xdotool` on X11, mutter RemoteDesktop on Wayland, `pynput` elsewhere).
 
 ## Notes
 
 - By default the microphone stays open while the program runs (that is what makes it fast). Turn on "open the mic only while the key is held" in Settings if that bothers you.
-- X11 only on Linux: key listening and typing don't work the same on Wayland.
+- Linux: X11 and GNOME Wayland are supported (see Install). Other Wayland compositors are untested.
 - The first GPU run compiles shaders, so startup includes a warm-up pass.
 - The queue and log are plain local files; see [SECURITY.md](SECURITY.md).
 
