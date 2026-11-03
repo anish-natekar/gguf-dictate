@@ -134,6 +134,7 @@ Press **`ctrl+alt+s`** (or tray menu -> Take snip). The screen freezes and a too
 | **Speak** / hold the dictate key | Voice note, saved under the selected colour's heading (**General** if none). |
 | **Full screen** (`F`) | Capture the whole screen. |
 | **Undo** (`Ctrl+Z`) | Undoes strokes and box changes, in order. |
+| **Undo note** (`Backspace`) | Removes the most recent voice note, whichever colour it is under. Repeat to remove earlier ones. |
 | **Clear pen**, **Save** (`Ctrl+Enter`), **Cancel** (`Esc`) | |
 | **Arrow keys** | Move along the bottom toolbar. Colours select as you pass them; `Enter` activates the focused button. |
 

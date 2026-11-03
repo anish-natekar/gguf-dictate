@@ -6,6 +6,8 @@
 - New `meeting_hotkey` setting (default `f8`); interrupted recordings are recovered on the next start.
 - Dictation and meeting transcription share one model session safely.
 - GNOME Wayland support for dictation and meetings: hotkeys read through evdev (add yourself to the `input` group and log in again), text pasted via `wl-copy` plus Ctrl+V sent through mutter RemoteDesktop, and the UI runs through XWayland so the overlay and pill stay positioned. The session is detected automatically; X11 is unchanged. Snip captures through the xdg-desktop-portal Screenshot API and crops the monitor under the cursor.
+- Snip editor: **Undo note** button (`Backspace`) removes the latest voice note.
+- Snip editor: fixed the notes panel not resizing, which hid or clipped notes after switching colours.
 
 ## 0.3.0
 - UI ported from GTK to Qt (PySide6); one process instead of tray + dictation subprocess. No system GTK packages needed.
