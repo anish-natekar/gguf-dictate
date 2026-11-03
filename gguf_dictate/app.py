@@ -210,14 +210,15 @@ def main():
     if args.model:
         save_config(remember_model(load_config(), str(Path(args.model).expanduser().resolve())))
 
+    from .platform import prefer_xwayland
+    prefer_xwayland()
     qapp = QApplication(sys.argv)
     qapp.setQuitOnLastWindowClosed(False)
     from .core.meeting_recorder import MeetingRecorder
     from .core.meetings import Library
     from .model import load_session
-    from .platform import default_keys, default_notifier, default_system_source, session_warning
+    from .platform import default_keys, default_listener, default_notifier, default_system_source
     from .platform.audio import SoundDeviceSource
-    from .platform.keys import start_listener
     from .ui import dialogs
     from .ui.meeting import MeetingController
     from .ui.meeting_pill import MeetingPill
@@ -247,7 +248,7 @@ def main():
         d.raise_()
         d.activateWindow()
 
-    app = App(load_session, SoundDeviceSource, keys, snip, overlay, tray, start_listener, dialogs.show_error, open_settings, qapp.quit,
+    app = App(load_session, SoundDeviceSource, keys, snip, overlay, tray, default_listener(), dialogs.show_error, open_settings, qapp.quit,
               log=lambda m: print(m, flush=True), show_help=lambda hk: dialogs.show_help(hk, log_path()), show_about=dialogs.show_about,
               meetings=meetings)
     tray.actions = app
@@ -256,10 +257,6 @@ def main():
     overlay.extra = app.on_command
     overlay.show()
     tray.show()
-    warning = session_warning()
-    if warning:
-        print(warning, flush=True)
-        QTimer.singleShot(1500, lambda: notifier.toast("Dictate hotkeys won't work", warning))
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: app.quit())
     ticker = QTimer()      # lets Python signal handlers run while Qt is idle

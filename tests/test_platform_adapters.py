@@ -53,7 +53,7 @@ def test_qt_notifier_calls_tray_message():
 
 
 def test_linux_defaults_are_xdotool_and_notify_send():
-    assert isinstance(default_keys("linux"), XdotoolKeys)
+    assert isinstance(default_keys("linux", wayland=False), XdotoolKeys)
     assert isinstance(default_notifier("linux", icon=None), NotifySend)
 
 
@@ -64,10 +64,3 @@ def test_other_platforms_use_pynput_and_qt(osname, monkeypatch):
     assert default_keys(osname) == "keys"
     assert isinstance(default_notifier(osname, icon=object()), QtNotifier)
 
-
-def test_session_warning_only_on_wayland_linux():
-    from gguf_dictate.platform import session_warning
-    assert "X11" in session_warning("linux", {"XDG_SESSION_TYPE": "wayland"})
-    assert session_warning("linux", {"XDG_SESSION_TYPE": "x11"}) is None
-    assert session_warning("linux", {}) is None
-    assert session_warning("win32", {"XDG_SESSION_TYPE": "wayland"}) is None

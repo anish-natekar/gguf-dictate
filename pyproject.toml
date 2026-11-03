@@ -9,7 +9,7 @@ description = "Local push-to-talk dictation and voice-annotated screenshot snips
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-dependencies = ["numpy", "platformdirs", "pynput", "PySide6-Essentials", "sounddevice", "transcribe-cpp"]
+dependencies = ["evdev; sys_platform == 'linux'", "jeepney; sys_platform == 'linux'", "numpy", "platformdirs", "pynput", "PySide6-Essentials", "sounddevice", "transcribe-cpp"]
 classifiers = [
     "Operating System :: POSIX :: Linux",
     "Environment :: X11 Applications :: Qt",
