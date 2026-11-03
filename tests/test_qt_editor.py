@@ -9,6 +9,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QPoint, Qt  # noqa: E402
 from PySide6.QtGui import QColor, QImage, QPixmap  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
+from PySide6.QtWidgets import QLabel  # noqa: E402
 
 from gguf_dictate.ui.editor import EditorView  # noqa: E402
 
@@ -169,3 +170,15 @@ def test_on_close_callback_runs_when_editor_closes(qtbot, tmp_path):
     v.show()
     v.close()
     assert closed == [1]
+
+
+def test_notes_panel_grows_to_show_every_colours_notes(env, qtbot):
+    view = env
+    view.pick(0)
+    view.add_note("first colour note")
+    view.pick(1)
+    view.add_note("second colour note that is long enough to wrap onto more than one line in the panel")
+    view.add_note("another for the second colour")
+    shown = [w for w in view.panel.findChildren(QLabel) if not w.isHidden()]
+    assert len(shown) == 6      # title, two headings, three notes
+    assert all(view.panel.rect().contains(w.geometry()) for w in shown)      # nothing clipped by a stale panel size

@@ -91,14 +91,15 @@ class Bus:
         return "/org/gnome/Mutter/RemoteDesktop/Session/u1" if method == "CreateSession" else None
 
 
-def test_paste_sends_ctrl_v_through_one_session():
+def test_paste_sends_ctrl_v_in_its_own_session_and_stops_it():
     bus = Bus()
-    keys = MutterKeys(call=bus)
+    keys = MutterKeys(call=bus, sleep=lambda s: None)
     keys.paste()
     keys.paste()
-    assert [c[0] for c in bus.calls].count("CreateSession") == 1 and [c[0] for c in bus.calls].count("Start") == 1
-    presses = [c[1] for c in bus.calls if c[0] == "NotifyKeyboardKeycode"][:4]
-    assert presses == [(KEY_LEFTCTRL, True), (KEY_V, True), (KEY_V, False), (KEY_LEFTCTRL, False)]
+    methods = [c[0] for c in bus.calls]
+    assert methods.count("CreateSession") == 2 and methods.count("Start") == 2 and methods.count("Stop") == 2
+    first = [c[1] for c in bus.calls if c[0] == "NotifyKeyboardKeycode"][:4]
+    assert first == [(KEY_LEFTCTRL, True), (KEY_V, True), (KEY_V, False), (KEY_LEFTCTRL, False)]
 
 
 def test_type_text_copies_then_pastes():
@@ -108,18 +109,21 @@ def test_type_text_copies_then_pastes():
     assert ran == [["wl-copy", "--", "-hello"]] and any(c[0] == "NotifyKeyboardKeycode" for c in bus.calls)
 
 
-def test_session_start_failure_propagates_and_retries():
+def test_failed_start_still_tries_to_stop_and_the_next_paste_works():
     state = {"fail": True}
+    calls = []
 
     def call(service, path, interface, method, signature="", args=()):
+        calls.append(method)
         if method == "Start" and state["fail"]:
             raise RuntimeError("denied")
         return "/s"
-    keys = MutterKeys(call=call)
+    keys = MutterKeys(call=call, sleep=lambda s: None)
     with pytest.raises(RuntimeError):
         keys.paste()
+    assert calls[-1] == "Stop"
     state["fail"] = False
-    keys.paste()      # a failed Start must not be cached as a live session
+    keys.paste()
 
 
 def test_session_selection():

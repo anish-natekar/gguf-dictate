@@ -194,16 +194,22 @@ class EditorView(QWidget):
         while lay.count():
             w = lay.takeAt(0).widget()
             if w and w is not self.panel_title:
+                w.hide()
+                w.setParent(None)      # out of the panel now, so it cannot count towards its size while waiting to be deleted
                 w.deleteLater()
         lay.addWidget(self.panel_title)
         for name, hexv, notes in m.panel_rows():
             head = QLabel(f'<b><span style="color:{hexv}">{name}</span></b>')
             lay.addWidget(head)
+            head.show()      # a widget added to a shown panel stays hidden, and a hidden one is left out of the panel's size
             for t in notes:
                 lab = QLabel("- " + t)
                 lab.setWordWrap(True)
                 lab.setMaximumWidth(280)
                 lay.addWidget(lab)
+                lab.show()
+        self.panel_title.show()
+        lay.activate()
         self.panel.setVisible(m.panel_visible())
         self.layout_overlays()
 

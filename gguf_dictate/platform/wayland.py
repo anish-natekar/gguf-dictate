@@ -9,6 +9,7 @@ ROOT = "/org/gnome/Mutter/RemoteDesktop"
 SESSION = "org.gnome.Mutter.RemoteDesktop.Session"
 KEY_LEFTCTRL, KEY_V = 29, 47      # evdev keycodes, which is what NotifyKeyboardKeycode takes
 PASTE_SETTLE_S = 0.12
+KEYS_SETTLE_S = 0.05
 
 NAMES = {"LEFTCTRL": "ctrl_l", "RIGHTCTRL": "ctrl_r", "LEFTALT": "alt_l", "RIGHTALT": "alt_gr", "LEFTSHIFT": "shift_l",
          "RIGHTSHIFT": "shift_r", "LEFTMETA": "cmd_l", "RIGHTMETA": "cmd_r", "ESC": "esc"}
@@ -93,26 +94,28 @@ class EvdevListener:
 
 
 class MutterKeys:
-    """Types by putting text on the clipboard (wl-copy) and sending Ctrl+V; needs no extra permission on GNOME."""
+    """Types by putting text on the clipboard (wl-copy) and sending Ctrl+V; needs no extra permission on GNOME.
+
+    A RemoteDesktop session is opened per paste: mutter drops idle ones, and a short-lived one leaves no remote-control indicator behind.
+    """
 
     def __init__(self, call=None, run=subprocess.run, sleep=time.sleep):
-        self.call, self.run, self.sleep, self.session = call or dbus_call, run, sleep, None
+        self.call, self.run, self.sleep = call or dbus_call, run, sleep
         self.lock = threading.Lock()
-
-    def ensure(self):
-        if self.session is None:
-            path = self.call(BUS, ROOT, "org.gnome.Mutter.RemoteDesktop", "CreateSession")
-            self.call(BUS, path, SESSION, "Start")
-            self.session = path
-        return self.session
-
-    def key(self, code, down):
-        self.call(BUS, self.ensure(), SESSION, "NotifyKeyboardKeycode", "ub", (code, down))
 
     def paste(self):
         with self.lock:
-            for code, down in ((KEY_LEFTCTRL, True), (KEY_V, True), (KEY_V, False), (KEY_LEFTCTRL, False)):
-                self.key(code, down)
+            session = self.call(BUS, ROOT, "org.gnome.Mutter.RemoteDesktop", "CreateSession")
+            try:
+                self.call(BUS, session, SESSION, "Start")
+                for code, down in ((KEY_LEFTCTRL, True), (KEY_V, True), (KEY_V, False), (KEY_LEFTCTRL, False)):
+                    self.call(BUS, session, SESSION, "NotifyKeyboardKeycode", "ub", (code, down))
+                self.sleep(KEYS_SETTLE_S)
+            finally:
+                try:
+                    self.call(BUS, session, SESSION, "Stop")
+                except RuntimeError:      # already gone
+                    pass
 
     def type_text(self, text):
         self.run(["wl-copy", "--", text], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
